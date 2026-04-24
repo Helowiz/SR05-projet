@@ -3,6 +3,7 @@ package main
 import (
 	"SR05_projet/display"
 	"SR05_projet/protocol"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -23,6 +24,8 @@ type Estampille struct {
 var h = 0
 var this_id int
 var n_sites int
+var messages_recus = make(map[Estampille]struct{}) // on veut just verifier l'existence
+
 var map_file = make(map[int]EltMapFile)
 
 /* Check si j'ai la plus petite estampille */
@@ -31,11 +34,12 @@ func smallest_estampille() bool {
 		display.Info("Controleur : "+strconv.Itoa(this_id), "smallest_estampille", "Pas encore decouvert tout le réseau")
 		return false
 	}
+
 	// pour chaque autre site dans mon map
 	for site_id, elt := range map_file {
 		if site_id != this_id { // si c'est pas moi même
 			// comparaison avec les estampilles (on check le numero de site en cas d'egalite des horloges)
-			if elt.val_h < h || (elt.val_h == h && site_id < this_id) {
+			if elt.val_h < map_file[this_id].val_h || (elt.val_h == map_file[this_id].val_h && site_id < this_id) {
 				return false
 			}
 		}
@@ -43,48 +47,62 @@ func smallest_estampille() bool {
 	return true
 }
 
-// /* Ajout un element au map s'il n'y est pas deja */
+func estampille_from_msg(msg string) (Estampille, error) {
+	rcv_h, err := strconv.Atoi(protocol.Findval(msg, "hlg", ""))
+	rcv_id, err := strconv.Atoi(protocol.Findval(msg, "id", ""))
+	if err != nil {
+		display.Error("", "estampille_from_msg", "Un ou plusieurs champs manquants")
+		return Estampille{0, 0}, errors.New("estampille malformée")
+	}
+	return Estampille{rcv_id, rcv_h}, nil
 
-// func add_if_nexists(m map[string]EltMapFile, key, liberation string) {
-// 	if _, ok := m[key]; !ok {
-// 		m[key] = EltMapFile{liberation, 0}
-// 	}
-// }
+}
 
 /* En fonction du type de message recu, execute le bon traitement */
 func parse_ctl_message(msg string) {
 	display.Info("Controleur : "+strconv.Itoa(this_id), "parse_ctl_msg", "Parsing : "+msg)
-
+	est, err := estampille_from_msg(msg)
 	msg_content := protocol.Findval(msg, "msg", "")
-	rcv_h, err := strconv.Atoi(protocol.Findval(msg, "hlg", ""))
-	rcv_id, err := strconv.Atoi(protocol.Findval(msg, "id", ""))
-	if msg_content == "" || err != nil {
-		display.Error("Message incomplet", "parse_message", "Un ou plusieurs champs manquants")
+
+	if err != nil {
+		return
+	}
+	if msg_content == "" {
+		display.Error("Message incomplet", "parse_message", "Message malforme : "+msg_content)
+		return
 	}
 
-	est := Estampille{rcv_id, rcv_h}
 	switch msg_content {
 
 	case "requete":
 		rec_dem_sc(est)
-
 	case "accuse":
+
 		rec_accuse_sc(est)
 
 	case "liberation":
 		rec_fin_sc(est)
+
+	default:
+		display.Info("", "parse_message", "Message ignore"+msg_content)
+
+		return
 
 	}
 
 }
 
 func parse_app_msg(msg string) {
-	display.Info("PARSING APP MESSAGE", "parse_app_msg", "Parsing : "+msg)
+	display.Info("", "parse_app_msg", "Parsing : "+msg)
 	switch msg {
-	case "debut_sc":
+	case "fromapp_debut_sc":
 		app_dem_sc()
-	case "fin_sc":
+	case "fromapp_fin_sc":
 		app_fin_sc()
+
+	default:
+		display.Info("", "parse_message", "Message ignore : "+msg)
+		return
 	}
 }
 
@@ -99,20 +117,37 @@ func parse_app_msg(msg string) {
 // }
 
 func envoyer(msg string, id int) {
-	fmt.Println(protocol.Msg_format("target", strconv.Itoa(id)) + protocol.Msg_format("id", strconv.Itoa(this_id)) + protocol.Msg_format("hlg", strconv.Itoa(h)) + protocol.Msg_format("msg", msg))
+	est := Estampille{this_id, h}
+	fmt.Println(protocol.Msg_format("target", strconv.Itoa(id)) + protocol.Msg_format("id", strconv.Itoa(est.id_site)) + protocol.Msg_format("hlg", strconv.Itoa(est.val_h)) + protocol.Msg_format("msg", msg))
+
+	// on ne veux pas traiter nos propres messages donc c'est comme si on l'avait deja recu
+	messages_recus[est] = struct{}{}
 }
 func envoyer_tous(msg string) {
-	fmt.Println(protocol.Msg_format("id", strconv.Itoa(this_id)) + protocol.Msg_format("hlg", strconv.Itoa(h)) + protocol.Msg_format("msg", msg))
+	est := Estampille{this_id, h}
+
+	fmt.Println(protocol.Msg_format("id", strconv.Itoa(est.id_site)) + protocol.Msg_format("hlg", strconv.Itoa(est.val_h)) + protocol.Msg_format("msg", msg))
+
+	// on ne veux pas traiter nos propres messages donc c'est comme si on l'avait deja recu
+	messages_recus[est] = struct{}{}
+}
+
+/* Route le message sans modifs aux successeurs*/
+func forward(msg string) {
+	fmt.Println(msg)
 }
 
 /* Previens l'application de base qu'on est en section critique*/
 func debut_sc() {
 	display.Info("Entrée en section critique", "debut_sc", "Entree SC")
+	fmt.Println("toapp_debut_sc")
 }
 
 /* Previens l'application de base qu'on est en fin de section critique*/
 func fin_sc() {
 	display.Info("Fin section critique", "fin_sc", "Fin SC")
+	fmt.Println("toapp_fin_sc")
+
 }
 
 /* Traite une demande d'entree en section critique de l'application de base */
@@ -127,6 +162,7 @@ func app_fin_sc() {
 	h++
 	map_file[this_id] = EltMapFile{"liberation", h}
 	envoyer_tous("liberation")
+	fin_sc()
 }
 
 /* Reception d'une requete de section critique d'un autre site */
@@ -165,16 +201,23 @@ func rec_fin_sc(est Estampille) {
 
 /* Reception d'un accuse de reception d'un autre site */
 func rec_accuse_sc(est Estampille) {
+	display.Info("", "rec_accuse_sc", "Reception accuse")
 	protocol.Recaler(h, est.val_h)
-
-	// On n’ecrase pas la date d’une requête par celle d’un accuse
-	if map_file[est.id_site].msg_type != "requete" {
+	// si le site n'exist pas encore dans la map on l'ajoute
+	if _, ok := map_file[est.id_site]; !ok {
 		map_file[est.id_site] = EltMapFile{"accuse", h}
-	}
 
+	} else {
+		// on n'ecrase pas une une ancienne requete avec un accuse
+		if map_file[est.id_site].msg_type != "requete" {
+			map_file[est.id_site] = EltMapFile{"accuse", h}
+		}
+	}
+	display.Info("", "rec_accuse_sc", strconv.FormatBool(smallest_estampille())+map_file[this_id].msg_type)
 	// verifier si l'arrivee de ce message nous permet de passer en SC
 	// j'ai envoye une requete et j'ai la plus petite estampille
 	if (map_file[this_id].msg_type == "requete") && smallest_estampille() {
+
 		debut_sc()
 	}
 
@@ -204,7 +247,7 @@ func main() {
 			display.Error(*p_nom, "erreur", "Lecture stdin terminée ou en erreur: "+err.Error())
 			//return
 		}
-		display.Info(*p_nom, "reception", "Reçu brut : "+rcvmsg)
+		//display.Info(*p_nom, "reception", "Reçu brut : "+rcvmsg)
 
 		sHrcv := protocol.Findval(rcvmsg, "hlg", *p_nom)
 
@@ -214,11 +257,27 @@ func main() {
 			h = protocol.Recaler(h, hrcv)
 			targetId := protocol.Findval(rcvmsg, "target", *p_nom)
 
-			// on ne traite que le message d'un autre controleur s'il est adresse a nous
-			if targetId == "" || targetId == strconv.Itoa(this_id) {
+			// extraire l'estampille
+			est, err := estampille_from_msg(rcvmsg)
+			if err != nil {
+				display.Error(*p_nom, "erreur", "Erreur estampille: "+err.Error())
+			}
 
+			if _, ok := messages_recus[est]; ok { // si le message a deje ete traite on fait rien
+				continue
+			}
+
+			// ajouter aux messages recus pour garder une trace
+			messages_recus[est] = struct{}{}
+
+			// si le message est pour ou pour tous nous on le traite
+			if targetId == "" || targetId == strconv.Itoa(this_id) {
 				// parse le message de controle
 				parse_ctl_message(rcvmsg)
+				// si le message est pour tous on le fait passer
+				forward(rcvmsg)
+			} else { // si le message n'est pas pour nous on le renvoi a nos successeurs
+				forward(rcvmsg)
 			}
 
 		} else { // reception de l'application de base

@@ -39,10 +39,10 @@ func do_websocket(w http.ResponseWriter, r *http.Request) {
 		switch string(message) {
 
 		case "section_critique":
-			fmt.Println("debut_sc")
+			fmt.Println("fromapp_debut_sc")
 
 		case "f_section_critique":
-			fmt.Println("fin_sc")
+			fmt.Println("fromapp_fin_sc")
 
 		}
 	}
@@ -70,7 +70,9 @@ func do_send() {
 			display.Error("SERVER :"+strconv.Itoa(os.Getpid()), "do_send()", "Scanln failed : "+err.Error())
 			return
 		}
-		ws_send(msg)
+		if msg == "toapp_debut_sc" || msg == "toapp_fin_sc" {
+			ws_send(msg)
+		}
 	}
 }
 
@@ -82,6 +84,6 @@ func main() {
 
 	http.HandleFunc("/", do_webserver)
 	http.HandleFunc("/ws", do_websocket)
-	//go do_send()
+	go do_send()
 	http.ListenAndServe(*addr+":"+*port, nil)
 }
