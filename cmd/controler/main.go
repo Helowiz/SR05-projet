@@ -113,7 +113,6 @@ func parse_ctl_message(msg string) {
 
 	default:
 		display.Info(proc_name, "parse_message", "Message ignore"+msg_content)
-
 		return
 
 	}
@@ -160,7 +159,7 @@ func forward(msg string) {
 func debut_sc() {
 	if !app_en_sc {
 		display.Info(proc_name, "debut_sc", "Entree SC")
-		fmt.Println("toapp_debut_sc")
+		fmt.Println("section_critique=true")
 		app_en_sc = true
 	}
 }
@@ -169,7 +168,7 @@ func debut_sc() {
 func fin_sc() {
 	if app_en_sc {
 		display.Info(proc_name, "fin_sc", "Fin SC")
-		fmt.Println("toapp_fin_sc")
+		fmt.Println("section_critique=false")
 		app_en_sc = false
 	}
 }

@@ -10,10 +10,12 @@
       </p>
     </form>
     <b> Application </b>
+    <h3>data : <span id = "data"></span><h3>
     <div>
       <p>
         <button id="debut_sc">demander section critique</button>
         <button id="fin_sc">fin section critique</button>
+        <button id="update">incrementer</button>
       </p>
     </div>
     <hr />
@@ -22,6 +24,21 @@
 
     <script>
       var ws;
+      var data = 0
+      function updateData(newData) {
+        data = newData
+
+        document.getElementById("data").innerText = newData
+      }
+
+      function handleReceive(msg) {
+        var [prefix, newData] = msg.split("=")
+        switch (prefix) {
+          case "data" : {
+            updateData(parseInt(newData))
+          }
+        }
+      } 
 
       function addToLog(message) {
         var logs = document.getElementById("logs");
@@ -54,6 +71,7 @@
 
         ws.onmessage = function (evt) {
           addToLog("Réception: " + evt.data);
+          handleReceive(evt.data)
         };
 
         ws.onerror = function (evt) {
@@ -84,6 +102,21 @@
         ws.send("f_section_critique");
         return false;
       };
+
+      document.getElementById("update").onclick = async function (evt) {
+        if (!ws) {
+          return false;
+        }
+        let tmpData = data + 1
+        await updateRemote(tmpData)
+
+        return false;
+      };
+
+      const updateRemote = async (newData) => {
+        ws.send("data="+newData)
+      }
+
     </script>
   </body>
 </html>
