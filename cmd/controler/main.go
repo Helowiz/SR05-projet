@@ -109,7 +109,10 @@ func parse_ctl_message(msg string) {
 		rec_accuse_sc(est)
 
 	case "liberation":
+		// on update les donnes
+		newData := protocol.Findval(msg, "data", proc_name)
 		rec_fin_sc(est)
+		send_to_app("data=" + newData)
 
 	default:
 		display.Info(proc_name, "parse_message", "Message ignore"+msg_content)
@@ -122,14 +125,20 @@ func parse_ctl_message(msg string) {
 /* Traite un message recu de l'application de base */
 func parse_app_msg(msg string) {
 	display.Info(proc_name, "parse_app_msg", "Parsing : "+msg)
-	switch msg {
+	type_msg := protocol.Findval(msg, "type", proc_name) // s'il retourne vide on ignore le message de toute facon
+	switch type_msg {
 	case "fromapp_debut_sc":
 		app_dem_sc()
 	case "fromapp_fin_sc":
-		app_fin_sc()
+		newData := protocol.Findval(msg, "data", proc_name)
+		if newData == "" {
+			display.Error(proc_name, "parse_app_message", "Nouvelles donnees non trouvees")
+			return
+		}
+		app_fin_sc(newData)
 
 	default:
-		display.Info(proc_name, "parse_message", "Message ignore : "+msg)
+		display.Info(proc_name, "parse_app_message", "Message ignore : "+msg)
 		return
 	}
 }
@@ -150,25 +159,42 @@ func envoyer_tous(msg string) {
 	messages_recus[est] = struct{}{}
 }
 
+/* Envoi aux autres le signal de liberation avec les donnes a jour*/
+func envoyer_liberation(newData string) {
+	est := Estampille{this_id, h}
+	fmt.Println(protocol.Msg_format("id", strconv.Itoa(est.id_site)) + protocol.Msg_format("hlg", strconv.Itoa(est.val_h)) + protocol.Msg_format("msg", "liberation") + protocol.Msg_format("data", newData))
+	// on ne veux pas traiter nos propres messages donc c'est comme si on l'avait deja recu
+	messages_recus[est] = struct{}{}
+
+}
+
+func send_to_app(msg string) {
+	fmt.Println(msg)
+}
+
 /* Route le message sans modifs aux successeurs*/
 func forward(msg string) {
 	fmt.Println(msg)
 }
 
 /* Previens l'application de base qu'on est en section critique*/
-func debut_sc() {
+func debut_sc_app() {
 	if !app_en_sc {
 		display.Info(proc_name, "debut_sc", "Entree SC")
-		fmt.Println("section_critique=true")
+		send_to_app("section_critique=true")
 		app_en_sc = true
 	}
 }
 
 /* Previens l'application de base qu'on est en fin de section critique*/
-func fin_sc() {
+func fin_sc_app(newData string) {
 	if app_en_sc {
 		display.Info(proc_name, "fin_sc", "Fin SC")
-		fmt.Println("section_critique=false")
+
+		// envoi le message a l'app que c'est la fin de la sc
+		send_to_app("section_critique=false")
+		// envoi les donnes modifies a l'app pour qu'elle confirme son changement
+		send_to_app("data=" + newData)
 		app_en_sc = false
 	}
 }
@@ -181,11 +207,11 @@ func app_dem_sc() {
 }
 
 /* Traite une demande de fin de section critique de l'application de base */
-func app_fin_sc() {
+func app_fin_sc(newData string) {
 	h++
 	map_file[this_id] = EltMapFile{"liberation", h}
-	envoyer_tous("liberation")
-	fin_sc()
+	envoyer_liberation(newData)
+	fin_sc_app(newData)
 }
 
 /* Reception d'une requete de section critique d'un autre site */
@@ -202,7 +228,7 @@ func rec_dem_sc(est Estampille) {
 	// verifier si l'arrivee de ce message nous permet de passer en SC
 	// j'ai envoye une requete et j'ai la plus petite estampille
 	if (map_file[this_id].msg_type == "requete") && smallest_estampille() {
-		debut_sc()
+		debut_sc_app()
 	}
 
 }
@@ -219,7 +245,7 @@ func rec_fin_sc(est Estampille) {
 	display.Info(proc_name, "rec_fin_sc", strconv.FormatBool(smallest_estampille())+map_file[this_id].msg_type)
 
 	if (map_file[this_id].msg_type == "requete") && smallest_estampille() {
-		debut_sc()
+		debut_sc_app()
 	}
 }
 
@@ -243,7 +269,7 @@ func rec_accuse_sc(est Estampille) {
 	// j'ai envoye une requete et j'ai la plus petite estampille
 	if (map_file[this_id].msg_type == "requete") && smallest_estampille() {
 
-		debut_sc()
+		debut_sc_app()
 	}
 
 }

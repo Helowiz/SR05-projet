@@ -2,6 +2,7 @@ package main
 
 import (
 	"SR05_projet/display"
+	"SR05_projet/protocol"
 	"flag"
 	"fmt"
 	"net/http"
@@ -18,11 +19,13 @@ var data int
 var in_section_critique bool = false
 
 func demander_sc() {
-	fmt.Println("fromapp_debut_sc")
+	msg := protocol.Msg_format("type", "fromapp_debut_sc")
+	fmt.Println(msg)
 }
 
-func liberer_sc() {
-	fmt.Println("fromapp_fin_sc")
+func liberer_sc(newData string) {
+	msg := protocol.Msg_format("type", "fromapp_fin_sc") + protocol.Msg_format("data", newData)
+	fmt.Println(msg)
 }
 
 func do_webserver(w http.ResponseWriter, r *http.Request) {
@@ -59,7 +62,7 @@ func do_websocket(w http.ResponseWriter, r *http.Request, active chan bool) {
 				demander_sc()
 			}
 			if suffix == "deactivate" {
-				liberer_sc()
+				liberer_sc("0")
 			}
 
 		case "data":
@@ -118,6 +121,8 @@ func handle_ctl_msgs(active chan<- bool) {
 				return
 			}
 			data = newData
+			// indique a l'interface d'update les donnes
+			ws_send("data=" + strconv.Itoa(newData))
 		}
 
 	}
@@ -135,9 +140,9 @@ func wait_for_sc(active <-chan bool) bool {
 
 func modify_data(newData int, active <-chan bool) {
 	wait_for_sc(active)
-	ws_send("data=" + strconv.Itoa(newData))
+	//
 	// give back section critique
-	liberer_sc()
+	liberer_sc(strconv.Itoa(newData))
 
 }
 
