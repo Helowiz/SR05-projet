@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 )
 
 type EltMapFile struct {
@@ -23,15 +24,29 @@ type Estampille struct {
 // global vars
 var h = 0
 var this_id int
+var proc_name string
 var n_sites int
 var messages_recus = make(map[Estampille]struct{}) // on veut just verifier l'existence
+var app_en_sc bool = false
 
 var map_file = make(map[int]EltMapFile)
 
+func map_file_to_string() string {
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("%-10s %-15s %-10s\n", "ID", "MSG_TYPE", "VAL_H"))
+	sb.WriteString(strings.Repeat("-", 35) + "\n")
+	for k, v := range map_file {
+		sb.WriteString(fmt.Sprintf("%-10d %-15s %-10d\n", k, v.msg_type, v.val_h))
+	}
+	return sb.String()
+}
+
 /* Check si j'ai la plus petite estampille */
 func smallest_estampille() bool {
+	display.Info(proc_name, "smallest_estampille", "Test estampille : \n"+map_file_to_string())
+
 	if len(map_file) != n_sites {
-		display.Info("Controleur : "+strconv.Itoa(this_id), "smallest_estampille", "Pas encore decouvert tout le réseau")
+		display.Info(proc_name, "smallest_estampille", "Pas encore decouvert tout le réseau")
 		return false
 	}
 
@@ -44,12 +59,24 @@ func smallest_estampille() bool {
 			}
 		}
 	}
+	display.Info(proc_name, "smallest_estampille", "TEST REUSSI")
+
 	return true
 }
 
+/* retourne vrai si c'est un message d'un controlleur faux sinon (msg app) */
+func is_ctl_message(msg string) bool {
+	sHrcv := protocol.Findval(msg, "hlg", proc_name)
+	if sHrcv != "" {
+		return true
+	}
+	return false
+}
+
+/* Extrait l'estampille d'un message, retourne aussi une erreur en cas de probleme */
 func estampille_from_msg(msg string) (Estampille, error) {
-	rcv_h, err := strconv.Atoi(protocol.Findval(msg, "hlg", ""))
-	rcv_id, err := strconv.Atoi(protocol.Findval(msg, "id", ""))
+	rcv_h, err := strconv.Atoi(protocol.Findval(msg, "hlg", proc_name))
+	rcv_id, err := strconv.Atoi(protocol.Findval(msg, "id", proc_name))
 	if err != nil {
 		display.Error("", "estampille_from_msg", "Un ou plusieurs champs manquants")
 		return Estampille{0, 0}, errors.New("estampille malformée")
@@ -58,17 +85,18 @@ func estampille_from_msg(msg string) (Estampille, error) {
 
 }
 
-/* En fonction du type de message recu, execute le bon traitement */
+/* Traite un message recu d'une autre application de controle */
 func parse_ctl_message(msg string) {
-	display.Info("Controleur : "+strconv.Itoa(this_id), "parse_ctl_msg", "Parsing : "+msg)
+	display.Info(proc_name, "parse_ctl_msg", "Parsing : "+msg)
 	est, err := estampille_from_msg(msg)
 	msg_content := protocol.Findval(msg, "msg", "")
 
 	if err != nil {
+		display.Error(proc_name, "parse_ctl_msg", "Estampille extraction failed")
 		return
 	}
 	if msg_content == "" {
-		display.Error("Message incomplet", "parse_message", "Message malforme : "+msg_content)
+		display.Error(proc_name, "parse_message", "Message malforme : "+msg_content)
 		return
 	}
 
@@ -76,15 +104,15 @@ func parse_ctl_message(msg string) {
 
 	case "requete":
 		rec_dem_sc(est)
-	case "accuse":
 
+	case "accuse":
 		rec_accuse_sc(est)
 
 	case "liberation":
 		rec_fin_sc(est)
 
 	default:
-		display.Info("", "parse_message", "Message ignore"+msg_content)
+		display.Info(proc_name, "parse_message", "Message ignore"+msg_content)
 
 		return
 
@@ -92,8 +120,9 @@ func parse_ctl_message(msg string) {
 
 }
 
+/* Traite un message recu de l'application de base */
 func parse_app_msg(msg string) {
-	display.Info("", "parse_app_msg", "Parsing : "+msg)
+	display.Info(proc_name, "parse_app_msg", "Parsing : "+msg)
 	switch msg {
 	case "fromapp_debut_sc":
 		app_dem_sc()
@@ -101,20 +130,10 @@ func parse_app_msg(msg string) {
 		app_fin_sc()
 
 	default:
-		display.Info("", "parse_message", "Message ignore : "+msg)
+		display.Info(proc_name, "parse_message", "Message ignore : "+msg)
 		return
 	}
 }
-
-// /* Envoi aux autres sites le message d'initialisation */
-// func envoi_init() {
-// 	envoyer_tous("init")
-// }
-
-// /* Traite un message d'initialisation d'un autre site */
-// func rec_init(est Estampille) {
-// 	map_file[est.id_site] = EltMapFile{"liberation", est.val_h}
-// }
 
 func envoyer(msg string, id int) {
 	est := Estampille{this_id, h}
@@ -139,15 +158,20 @@ func forward(msg string) {
 
 /* Previens l'application de base qu'on est en section critique*/
 func debut_sc() {
-	display.Info("Entrée en section critique", "debut_sc", "Entree SC")
-	fmt.Println("toapp_debut_sc")
+	if !app_en_sc {
+		display.Info(proc_name, "debut_sc", "Entree SC")
+		fmt.Println("toapp_debut_sc")
+		app_en_sc = true
+	}
 }
 
 /* Previens l'application de base qu'on est en fin de section critique*/
 func fin_sc() {
-	display.Info("Fin section critique", "fin_sc", "Fin SC")
-	fmt.Println("toapp_fin_sc")
-
+	if app_en_sc {
+		display.Info(proc_name, "fin_sc", "Fin SC")
+		fmt.Println("toapp_fin_sc")
+		app_en_sc = false
+	}
 }
 
 /* Traite une demande d'entree en section critique de l'application de base */
@@ -167,18 +191,15 @@ func app_fin_sc() {
 
 /* Reception d'une requete de section critique d'un autre site */
 func rec_dem_sc(est Estampille) {
-	protocol.Recaler(h, est.val_h)
+	display.Info(proc_name, "rec_dem_sc", "Avant RECALAGE horloge h :"+strconv.Itoa(h)+"est.val_h : "+strconv.Itoa(est.val_h))
 
-	// verifier l'existence du site dans le map
-	// _, ok := map_file[est.id_site]
-	// if !ok {
-	// 	display.Error("out of range", "rec_dem_sc", "id site not in map")
-	// 	return
-	// }
+	h = protocol.Recaler(h, est.val_h)
+	display.Info(proc_name, "rec_dem_sc", "Apres RECALAGE horloge h :"+strconv.Itoa(h)+"est.val_h : "+strconv.Itoa(est.val_h))
 
-	map_file[est.id_site] = EltMapFile{"requete", est.id_site}
+	map_file[est.id_site] = EltMapFile{"requete", est.val_h}
 
 	envoyer("accuse", est.id_site)
+
 	// verifier si l'arrivee de ce message nous permet de passer en SC
 	// j'ai envoye une requete et j'ai la plus petite estampille
 	if (map_file[this_id].msg_type == "requete") && smallest_estampille() {
@@ -189,11 +210,15 @@ func rec_dem_sc(est Estampille) {
 
 /* Reception d'une fin de section critique d'un autre site */
 func rec_fin_sc(est Estampille) {
-	protocol.Recaler(h, est.val_h)
-	map_file[est.id_site] = EltMapFile{"liberation", h}
+	display.Info(proc_name, "rec_fin_sc", "")
+
+	h = protocol.Recaler(h, est.val_h)
+	map_file[est.id_site] = EltMapFile{"liberation", est.val_h}
 
 	// verifier si l'arrivee de ce message nous permet de passer en SC
 	// j'ai envoye une requete et j'ai la plus petite estampille
+	display.Info(proc_name, "rec_fin_sc", strconv.FormatBool(smallest_estampille())+map_file[this_id].msg_type)
+
 	if (map_file[this_id].msg_type == "requete") && smallest_estampille() {
 		debut_sc()
 	}
@@ -201,19 +226,20 @@ func rec_fin_sc(est Estampille) {
 
 /* Reception d'un accuse de reception d'un autre site */
 func rec_accuse_sc(est Estampille) {
-	display.Info("", "rec_accuse_sc", "Reception accuse")
-	protocol.Recaler(h, est.val_h)
+	display.Info(proc_name, "rec_accuse_sc", "Reception accuse")
+	h = protocol.Recaler(h, est.val_h)
 	// si le site n'exist pas encore dans la map on l'ajoute
 	if _, ok := map_file[est.id_site]; !ok {
-		map_file[est.id_site] = EltMapFile{"accuse", h}
+		map_file[est.id_site] = EltMapFile{"accuse", est.val_h}
 
 	} else {
 		// on n'ecrase pas une une ancienne requete avec un accuse
 		if map_file[est.id_site].msg_type != "requete" {
-			map_file[est.id_site] = EltMapFile{"accuse", h}
+			map_file[est.id_site] = EltMapFile{"accuse", est.val_h}
 		}
 	}
-	display.Info("", "rec_accuse_sc", strconv.FormatBool(smallest_estampille())+map_file[this_id].msg_type)
+	display.Info(proc_name, "rec_accuse_sc", strconv.FormatBool(smallest_estampille())+map_file[this_id].msg_type)
+
 	// verifier si l'arrivee de ce message nous permet de passer en SC
 	// j'ai envoye une requete et j'ai la plus petite estampille
 	if (map_file[this_id].msg_type == "requete") && smallest_estampille() {
@@ -225,80 +251,67 @@ func rec_accuse_sc(est Estampille) {
 
 func main() {
 
+	// arguments en entree
 	p_nom := flag.String("n", "controler", "nom")
-	p_nbsites := flag.String("nbsites", "controler", "nombre de sites")
+	p_nbsites := flag.Int("nbsites", 1, "nombre de sites")
 	flag.Parse()
 
-	n_sites, _ = strconv.Atoi(*p_nbsites)
-
-	display.Info(*p_nom, "main", "Démarrage du contrôleur...")
-
+	// init de l'identite du site
+	proc_name = *p_nom
 	this_id = os.Getpid() // assigner notre pid a la variable global
 
-	var rcvmsg string
-	var hrcv int
-	//var sndmsg string
+	// on note le nombre de sites
+	n_sites = *p_nbsites
 
-	//envoi_init()
+	display.Info(proc_name, "main", "Démarrage du contrôleur...")
 
+	var rcvmsg string // message recu
+
+	// boucle infini qui scan stdin pour des messages
 	for {
 		_, err := fmt.Scanln(&rcvmsg)
 		if err != nil {
 			display.Error(*p_nom, "erreur", "Lecture stdin terminée ou en erreur: "+err.Error())
 			//return
 		}
+
 		//display.Info(*p_nom, "reception", "Reçu brut : "+rcvmsg)
 
-		sHrcv := protocol.Findval(rcvmsg, "hlg", *p_nom)
-
 		// reception d'un autre site
-		if sHrcv != "" {
-			hrcv, _ = strconv.Atoi(sHrcv)
-			h = protocol.Recaler(h, hrcv)
+		if is_ctl_message(rcvmsg) {
+
 			targetId := protocol.Findval(rcvmsg, "target", *p_nom)
 
 			// extraire l'estampille
 			est, err := estampille_from_msg(rcvmsg)
 			if err != nil {
 				display.Error(*p_nom, "erreur", "Erreur estampille: "+err.Error())
+				return
 			}
 
-			if _, ok := messages_recus[est]; ok { // si le message a deje ete traite on fait rien
+			// si le message a deje ete traite on fait rien
+			if _, ok := messages_recus[est]; ok {
 				continue
 			}
 
 			// ajouter aux messages recus pour garder une trace
 			messages_recus[est] = struct{}{}
 
-			// si le message est pour ou pour tous nous on le traite
+			// si le message est pour nous ou pour tous nous on le traite
 			if targetId == "" || targetId == strconv.Itoa(this_id) {
 				// parse le message de controle
 				parse_ctl_message(rcvmsg)
 				// si le message est pour tous on le fait passer
-				forward(rcvmsg)
+				if targetId == "" {
+					forward(rcvmsg)
+				}
 			} else { // si le message n'est pas pour nous on le renvoi a nos successeurs
 				forward(rcvmsg)
 			}
 
 		} else { // reception de l'application de base
-			h = h + 1
+			h++
 			parse_app_msg(rcvmsg)
-			//display.Info(*p_nom, "horloge", fmt.Sprintf("Pas de 'hlg', incrémentation locale -> H=%d", h))
 		}
-
-		/*
-			sndmsg = protocol.Findval(rcvmsg, "msg", *p_nom)
-
-			if sndmsg == "" {
-				display.Info(*p_nom, "format", "Formatage du message complet avec horloge ajoutée")
-				newMsg := protocol.Msg_format("msg", rcvmsg) + protocol.Msg_format("hlg", strconv.Itoa(h))
-				fmt.Println(newMsg)
-				display.Info(*p_nom, "emission", "Transmis : "+newMsg)
-			} else {
-				display.Info(*p_nom, "format", "Message extrait avec succès")
-				fmt.Println(sndmsg)
-				display.Info(*p_nom, "emission", "Transmis : "+sndmsg)
-			}
-		*/
 	}
 }

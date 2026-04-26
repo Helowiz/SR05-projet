@@ -55,9 +55,9 @@ func ws_send(msg string) {
 	} else {
 		err := ws.WriteMessage(websocket.TextMessage, []byte(msg))
 		if err != nil {
-			fmt.Println("ws_send", "WriteMessage : "+string(err.Error()))
+			//fmt.Println("ws_send", "WriteMessage : "+string(err.Error()))
 		} else {
-			fmt.Println("ws_send", "sending "+msg)
+			//fmt.Println("ws_send", "sending "+msg)
 		}
 	}
 }
