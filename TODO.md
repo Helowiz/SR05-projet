@@ -1,2 +1,0 @@
-- Voir comment faire pour l'id des sites si on utilise un map (comment l'init, comment les sites se connaissent)
-- Voir comment faire pour envoyer un message a un site en particulier (idée pour l'instant est d'envoyer aussi l'id du destinataire)
