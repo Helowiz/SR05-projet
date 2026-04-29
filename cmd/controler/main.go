@@ -22,15 +22,17 @@ type Estampille struct {
 }
 
 // global vars
-var h = 0
-var this_id int
-var proc_name string
-var n_sites int
-var messages_recus = make(map[Estampille]struct{}) // on veut just verifier l'existence
-var app_en_sc bool = false
+var h = 0            // horloge du site
+var this_id int      // id du site (passe en param)
+var proc_name string // nom du site (passe en param)
+var n_sites int      // nombre de sites (passe en param)
 
-var map_file = make(map[int]EltMapFile)
+var messages_recus = make(map[Estampille]struct{}) // map juste pour verifier l'existence des messages
+var app_en_sc bool = false                         // indique si l'app est en section critique
 
+var map_file = make(map[int]EltMapFile) // map pour la file d'attente
+
+/* Fonction utilitaire juste pour print la map file*/
 func map_file_to_string() string {
 	var sb strings.Builder
 	sb.WriteString(fmt.Sprintf("%-10s %-15s %-10s\n", "ID", "MSG_TYPE", "VAL_H"))
@@ -41,7 +43,7 @@ func map_file_to_string() string {
 	return sb.String()
 }
 
-/* Check si j'ai la plus petite estampille */
+/* Check si j'ai la plus petite estampille et que j'ai bien tout les sites dans la map*/
 func smallest_estampille() bool {
 	display.Info(proc_name, "smallest_estampille", "Test estampille : \n"+map_file_to_string())
 
@@ -59,14 +61,14 @@ func smallest_estampille() bool {
 			}
 		}
 	}
-	display.Info(proc_name, "smallest_estampille", "TEST REUSSI")
+	//display.Info(proc_name, "smallest_estampille", "TEST REUSSI")
 
 	return true
 }
 
-/* retourne vrai si c'est un message d'un controlleur faux sinon (msg app) */
+/* Retourne vrai si c'est un message d'un controlleur faux sinon (msg app) */
 func is_ctl_message(msg string) bool {
-	sHrcv := protocol.Findval(msg, "hlg", proc_name)
+	sHrcv := protocol.Findval(msg, "hlg", proc_name) // les message de control on une champ hlg
 	if sHrcv != "" {
 		return true
 	}
@@ -109,10 +111,11 @@ func parse_ctl_message(msg string) {
 		rec_accuse_sc(est)
 
 	case "liberation":
-		// on update les donnes
+		// on update les donnes avec le champ data recu
+		//(un message de liberation devrai toujours avoir un champ data)
 		newData := protocol.Findval(msg, "data", proc_name)
 		rec_fin_sc(est)
-		send_to_app("data=" + newData)
+		send_to_app("data", newData)
 
 	default:
 		display.Info(proc_name, "parse_message", "Message ignore"+msg_content)
@@ -168,8 +171,9 @@ func envoyer_liberation(newData string) {
 
 }
 
-func send_to_app(msg string) {
-	fmt.Println(msg)
+/* Envoi un message a l'app (just stdout car l'app y est connectee) */
+func send_to_app(msg_type string, value string) {
+	fmt.Println(protocol.Msg_format("type", msg_type) + protocol.Msg_format("value", value))
 }
 
 /* Route le message sans modifs aux successeurs*/
@@ -181,7 +185,7 @@ func forward(msg string) {
 func debut_sc_app() {
 	if !app_en_sc {
 		display.Info(proc_name, "debut_sc", "Entree SC")
-		send_to_app("section_critique=true")
+		send_to_app("section_critique", "true")
 		app_en_sc = true
 	}
 }
@@ -192,9 +196,11 @@ func fin_sc_app(newData string) {
 		display.Info(proc_name, "fin_sc", "Fin SC")
 
 		// envoi le message a l'app que c'est la fin de la sc
-		send_to_app("section_critique=false")
+		send_to_app("section_critique", "false")
+
 		// envoi les donnes modifies a l'app pour qu'elle confirme son changement
-		send_to_app("data=" + newData)
+		send_to_app("data", newData)
+
 		app_en_sc = false
 	}
 }
@@ -216,10 +222,8 @@ func app_fin_sc(newData string) {
 
 /* Reception d'une requete de section critique d'un autre site */
 func rec_dem_sc(est Estampille) {
-	display.Info(proc_name, "rec_dem_sc", "Avant RECALAGE horloge h :"+strconv.Itoa(h)+"est.val_h : "+strconv.Itoa(est.val_h))
 
 	h = protocol.Recaler(h, est.val_h)
-	display.Info(proc_name, "rec_dem_sc", "Apres RECALAGE horloge h :"+strconv.Itoa(h)+"est.val_h : "+strconv.Itoa(est.val_h))
 
 	map_file[est.id_site] = EltMapFile{"requete", est.val_h}
 
@@ -242,7 +246,7 @@ func rec_fin_sc(est Estampille) {
 
 	// verifier si l'arrivee de ce message nous permet de passer en SC
 	// j'ai envoye une requete et j'ai la plus petite estampille
-	display.Info(proc_name, "rec_fin_sc", strconv.FormatBool(smallest_estampille())+map_file[this_id].msg_type)
+	//display.Info(proc_name, "rec_fin_sc", strconv.FormatBool(smallest_estampille())+map_file[this_id].msg_type)
 
 	if (map_file[this_id].msg_type == "requete") && smallest_estampille() {
 		debut_sc_app()

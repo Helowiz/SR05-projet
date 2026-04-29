@@ -97,15 +97,15 @@ func handle_ctl_msgs(active chan<- bool) {
 	for {
 		_, err := fmt.Scanln(&msg)
 		if err != nil {
-			display.Error("SERVER :"+strconv.Itoa(os.Getpid()), "do_send()", "Scanln failed : "+err.Error())
+			display.Error("SERVER :"+strconv.Itoa(os.Getpid()), "handle_ctl_msgs", "Scanln failed : "+err.Error())
 			return
 		}
-		parts := strings.Split(msg, "=")
-		prefix, suffix := parts[0], parts[1]
+		msg_type := protocol.Findval(msg, "type", "server")
+		msg_val := protocol.Findval(msg, "value", "server")
 
-		switch prefix {
+		switch msg_type {
 		case "section_critique": // message sur la section critique
-			if suffix == "true" {
+			if msg_val == "true" {
 				in_section_critique = true
 				ws_send("info=debut section critique")
 				active <- true
@@ -115,7 +115,7 @@ func handle_ctl_msgs(active chan<- bool) {
 			}
 
 		case "data": // message sur l'update des données
-			newData, err := strconv.Atoi(suffix)
+			newData, err := strconv.Atoi(msg_val)
 			if err != nil {
 				display.Error("", "handle_ctl_msgs", "data could not be converted")
 				return
