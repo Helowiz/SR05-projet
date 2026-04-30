@@ -358,14 +358,16 @@
       // =========================================
       // State
       // =========================================
+      const TEXT_MIN_SIZE = 8;
       let shapes = {}; // { id: shapeObj }
       let selectedId = null;
       let tool = "select";
       let idCounter = 0;
 
       // Interaction state
-      let isDown = false;
+      let isMouseDown = false;
       let mouseStart = { x: 0, y: 0 };
+      let lastMousePos = { x: 0, y: 0 };
       let drawState = null; // while creating a shape by drag
       let dragState = null; // while moving / resizing
 
@@ -398,31 +400,27 @@
       function drawGrid() {
         ctx.strokeStyle = "#191919";
         ctx.lineWidth = 1;
+        ctx.beginPath();
         for (let x = 0; x < canvas.width; x += GRID) {
-          ctx.beginPath();
           ctx.moveTo(x, 0);
           ctx.lineTo(x, canvas.height);
-          ctx.stroke();
         }
         for (let y = 0; y < canvas.height; y += GRID) {
-          ctx.beginPath();
           ctx.moveTo(0, y);
           ctx.lineTo(canvas.width, y);
-          ctx.stroke();
         }
+        ctx.stroke();
         ctx.strokeStyle = "#1f1f1f";
+        ctx.beginPath();
         for (let x = 0; x < canvas.width; x += GRID * 5) {
-          ctx.beginPath();
           ctx.moveTo(x, 0);
           ctx.lineTo(x, canvas.height);
-          ctx.stroke();
         }
         for (let y = 0; y < canvas.height; y += GRID * 5) {
-          ctx.beginPath();
           ctx.moveTo(0, y);
           ctx.lineTo(canvas.width, y);
-          ctx.stroke();
         }
+        ctx.stroke();
       }
 
       function drawShape(s, selected) {
@@ -450,7 +448,7 @@
             drawHandlesCircle(+s.x, +s.y, +s.r);
           }
         } else if (s.cmd === "text") {
-          const size = +(s.size || 20);
+          const size = Math.max(+(s.size || 20), TEXT_MIN_SIZE);
           ctx.fillStyle = s.color || "#ffffff";
           ctx.font = `${size}px 'Courier New', monospace`;
           ctx.fillText(s.value || "", +s.x, +s.y);
@@ -622,46 +620,49 @@
       function applyHandleMove(cmd, handleIdx, dx, dy, orig) {
         if (cmd === "rect") {
           let { x, y, w, h } = orig;
+          // Au cas où les valeurs seraient des strings, on les convertit en nombres pour éviter les concaténations lors des calculs.
           x = +x;
           y = +y;
           w = +w;
           h = +h;
           switch (handleIdx) {
-            case 0:
+            case 0: // TL
               x += dx;
               y += dy;
               w -= dx;
               h -= dy;
-              break; // TL
-            case 1:
+              break;
+            case 1: // TC
               y += dy;
               h -= dy;
-              break; // TC
-            case 2:
+              break;
+            case 2: // TR
               y += dy;
               w += dx;
               h -= dy;
-              break; // TR
-            case 3:
+              break;
+            case 3: // ML
               x += dx;
               w -= dx;
-              break; // ML
-            case 4:
+              break;
+            case 4: // MR
               w += dx;
-              break; // MR
-            case 5:
+              break;
+            case 5: // BL
               x += dx;
               w -= dx;
               h += dy;
-              break; // BL
-            case 6:
+              break;
+            case 6: // BC
               h += dy;
-              break; // BC
-            case 7:
+              break;
+            case 7: // BR
               w += dx;
               h += dy;
-              break; // BR
+              break;
           }
+
+          // Pour éviter que le rectangle ne s'inverse si on dépasse du côté opposé, on impose une taille minimale de 5 pixels. Si la largeur ou la hauteur devient inférieure à 5, on la remet à 5 et on ajuste la position en conséquence pour que le handle suive le curseur.
           if (w < 5) {
             x = x + w - 5;
             w = 5;
@@ -680,44 +681,43 @@
           const delta = [-dy, dx, dy, -dx][handleIdx] ?? 0;
           return { r: Math.max(5, Math.round(+orig.r + delta)) };
         } else if (cmd === "text") {
-          // For text, only allow size change via TC/BC (increase/decrease size)
+          // Pour le texte, on empêche la modification de taille par les côtés (TODO : faire en sorte que les handles de côtés modifient la taille aussi)
           let { x, y, w, h } = orig;
           x = +x;
           y = +y;
           w = +w;
           h = +h;
+          // NOTE : le y du texte correspond à la ligne de base (bas du texte)
+          y -= h; // On convertit le y de la ligne de base au y du coin supérieur pour réutiliser la même logique que pour les rectangles.
           switch (handleIdx) {
-            case 0:
+            case 0: // TL
               x += dx;
               y += dy;
               w -= dx;
               h -= dy;
               break;
-            case 1:
+            case 1: // TC
               y += dy;
               h -= dy;
               break;
-            case 2:
+            case 2: // TR
               y += dy;
               w += dx;
               h -= dy;
               break;
-            case 3:
-              x += dx;
-              w -= dx;
+            case 3: // ML
               break;
-            case 4:
-              w += dx;
+            case 4: // MR
               break;
-            case 5:
+            case 5: // BL
               x += dx;
               w -= dx;
               h += dy;
               break;
-            case 6:
+            case 6: // BC
               h += dy;
               break;
-            case 7:
+            case 7: // BR
               w += dx;
               h += dy;
               break;
@@ -741,7 +741,7 @@
 
       canvas.addEventListener("mousedown", (e) => {
         const { x, y } = getPos(e);
-        isDown = true;
+        isMouseDown = true;
         mouseStart = { x, y };
 
         if (tool === "select") {
@@ -781,66 +781,63 @@
             selectShape(null);
           }
         } else if (tool === "text") {
-          const id = genId();
-          const s = {
-            cmd: "text",
-            id,
-            x: Math.round(x),
-            y: Math.round(y),
-            value: "Text",
-            size: 20,
-            color: currentColor(),
-          };
-          shapes[id] = s;
-          sendOut(encode(s));
-          selectShape(id);
-          redraw();
           const val = prompt("Enter text:", "Text");
-          if (val !== null && shapes[id]) {
-            const old = { ...shapes[id] };
-            shapes[id].value = val;
-            sendOut(encode({ op: "update", id, value: val }));
-          } else if (val === null) {
-            delete shapes[id];
+          if (val !== null) {
+            const id = genId();
+            const s = {
+              cmd: "text",
+              id,
+              x: Math.round(x),
+              y: Math.round(y),
+              value: val,
+              size: 20,
+              color: currentColor(),
+            };
+            shapes[id] = s;
+            sendOut(encode(s));
+            selectShape(id);
+            redraw();
           }
-          redraw();
         } else {
           drawState = { type: tool, startX: x, startY: y, previewShape: null };
         }
       });
 
-      canvas.addEventListener("mousemove", (e) => {
-        const { x, y } = getPos(e);
-
-        // Cursor when not dragging
-        if (!isDown) {
-          if (tool !== "select") {
-            canvas.style.cursor = "crosshair";
-            return;
-          }
-          const sel = shapes[selectedId];
-          if (sel) {
-            const h = hitHandle(x, y, sel);
-            if (h !== -1) {
-              const cursors = [
-                "nw-resize",
-                "n-resize",
-                "ne-resize",
-                "w-resize",
-                "e-resize",
-                "sw-resize",
-                "s-resize",
-                "se-resize",
-              ];
-              canvas.style.cursor = cursors[h] ?? "pointer";
-              return;
-            }
-          }
-          canvas.style.cursor = hitTest(x, y) ? "move" : "default";
+      function updateCursorStyle(x, y) {
+        if (tool !== "select") {
+          canvas.style.cursor = "crosshair";
           return;
         }
+        const sel = shapes[selectedId];
+        if (sel) {
+          const h = hitHandle(x, y, sel);
+          if (h !== -1) {
+            const cursors = [
+              "nw-resize",
+              "n-resize",
+              "ne-resize",
+              "w-resize",
+              "e-resize",
+              "sw-resize",
+              "s-resize",
+              "se-resize",
+            ];
+            canvas.style.cursor = cursors[h] ?? "pointer";
+            return;
+          }
+        }
+        canvas.style.cursor = hitTest(x, y) ? "move" : "default";
+        return;
+      }
 
-        if (dragState) {
+      canvas.addEventListener("mousemove", (e) => {
+        const { x, y } = getPos(e);
+        lastMousePos = { x, y };
+
+        // Cursor when not dragging
+        if (!isMouseDown) {
+          updateCursorStyle(x, y);
+        } else if (dragState) {
           const s = shapes[dragState.origShape.id];
           if (!s) return;
           const dx = x - dragState.startX;
@@ -935,7 +932,7 @@
           }
         }
 
-        isDown = false;
+        isMouseDown = false;
         drawState = null;
         redraw();
       });
@@ -1008,7 +1005,7 @@
       // Prop input → send update
       function propChanged(key, val) {
         if (!selectedId || !shapes[selectedId]) return;
-        const orig = { ...shapes[selectedId] };
+        // const orig = { ...shapes[selectedId] };
         shapes[selectedId][key] = val;
         sendOut(encode({ op: "update", id: selectedId, [key]: val }));
         redraw();
@@ -1026,9 +1023,15 @@
             "prop-r": "r",
             "prop-size": "size",
           };
-          el.addEventListener("change", (e) =>
-            propChanged(keyMap[elId], +e.target.value),
-          );
+          el.addEventListener("change", (e) => {
+            let key = keyMap[elId];
+            let val = +e.target.value;
+            if (key === "size" && val < TEXT_MIN_SIZE) {
+              val = TEXT_MIN_SIZE;
+              e.target.value = TEXT_MIN_SIZE;
+            }
+            propChanged(key, val);
+          });
         },
       );
 
@@ -1090,6 +1093,7 @@
         };
         if (map[e.key]) {
           document.querySelector(`[data-tool="${map[e.key]}"]`).click();
+          updateCursorStyle(lastMousePos.x, lastMousePos.y);
         }
         if (e.key === "Delete" || e.key === "Backspace") deleteSelected();
         if (e.key === "Escape") selectShape(null);
