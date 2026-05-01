@@ -159,8 +159,10 @@ func modify_data(newOpe string, active chan bool) {
 		}
 	case "delete":
 		whiteboard.RemoveShape(id)
+	case "clear":
+		whiteboard.Clear()
 	default:
-		display.Warning("server", "modify", "OP inconnue")
+		display.Warning("server", "modify", "OP inconnue : "+op)
 	}
 }
 

@@ -153,6 +153,10 @@ func (wb *WhiteBoard) RemoveShape(id string) {
 	}
 }
 
+func (wb *WhiteBoard) Clear() {
+	*wb = Empty_board()
+}
+
 // Méthode permettant de mettre à jour une forme du tableau blanc à partir de son ID et d'une nouvelle forme
 func (wb *WhiteBoard) UpdateShape(id string, key string, value string) {
 	if shape, exists := wb.Shapes[id]; exists {
