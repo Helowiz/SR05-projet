@@ -36,6 +36,7 @@ func Findval(msg string, key string, name string) string {
 			return ""
 		}
 	}
+	//display.Warning(name, "FindVal", "tab_allkeyvals vide : "+msg)
 	return ""
 }
 

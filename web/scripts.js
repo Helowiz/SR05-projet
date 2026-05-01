@@ -675,6 +675,7 @@ canvas.addEventListener("mouseup", (e) => {
             const id = generateId();
             addToLog("Generated ID: " + id);
             const s = {
+                op: "create",
                 ...ps,
                 id,
                 x: Math.round(+ps.x),
@@ -995,7 +996,7 @@ function applyMsg(ope) {
         shapes = {};
         selectShape(null);
         // idCounter = 0; // Pas sûr que reset le compteur soit une vraie bonne idée, à voir avec la gestion des snapshots, horloges etc (TODO)
-    } else if (d.cmd) {
+    } else if (d.op === "create" && d.cmd) {
         const { cmd, id, ...rest } = d;
         for (const k of ["x", "y", "w", "h", "r", "size"]) {
             if (rest[k] !== undefined) rest[k] = +rest[k];

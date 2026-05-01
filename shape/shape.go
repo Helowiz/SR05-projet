@@ -53,7 +53,8 @@ func ParseShape(s string) (Shape, error) {
 	err := error(nil)
 	entries := strings.Split(s, SHAPE_ENTRY_SEP)
 	for _, entry := range entries {
-		kv := strings.Split(entry, SHAPE_KEY_VALUE_SEP)
+		cleanEntry := strings.TrimPrefix(entry, SHAPE_KEY_VALUE_SEP)
+		kv := strings.Split(cleanEntry, SHAPE_KEY_VALUE_SEP)
 		if len(kv) != 2 {
 			continue
 		}
@@ -108,6 +109,22 @@ func (s *Shape) set(key string, value string) error {
 	return err
 }
 
+func (s Shape) String() string {
+	base := fmt.Sprintf("Type: %-6s | Pos: (%d,%d) | Couleur: %s", s.Cmd, s.X, s.Y, s.Color)
+
+	// Détails spécifiques selon la commande
+	switch s.Cmd {
+	case "rect":
+		return fmt.Sprintf("%s | Taille: %dx%d", base, s.W, s.H)
+	case "circle":
+		return fmt.Sprintf("%s | Rayon: %d", base, s.R)
+	case "text":
+		return fmt.Sprintf("%s | Texte: \"%s\" (Taille: %d)", base, s.Val, s.Size)
+	default:
+		return base // Pour les cas inconnus
+	}
+}
+
 type WhiteBoard struct {
 	Shapes map[string]Shape
 }
@@ -124,6 +141,7 @@ func (wb *WhiteBoard) AddShape(id string, shape Shape) {
 	} else {
 		wb.Shapes[id] = shape
 	}
+	display.Info("", "addShape", wb.String())
 }
 
 // Méthode permettant de supprimer une forme du tableau blanc à partir de son ID
@@ -152,7 +170,7 @@ func (wb *WhiteBoard) UpdateShape(id string, key string, value string) {
 // to string d'un whiteboard
 func (wb *WhiteBoard) String() string {
 	if len(wb.Shapes) == 0 {
-		return "WhiteBoard (vide)"
+		return "vide"
 	}
 
 	keys := make([]string, 0, len(wb.Shapes))

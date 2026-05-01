@@ -20,11 +20,14 @@ var whiteboard shape.WhiteBoard
 var lastOpe string = ""
 var in_section_critique bool = false
 var is_snaped = false
+var pendingOpe = ""
 
-func do_local_snapshot() {
-	is_snaped = true
-	display.Info("WHITE", "SERVER", "snapshot = "+whiteboard.String())
-}
+//func do_local_snapshot() {
+//
+//		display.Info("SNAP", "snapshot", whiteboard.String())
+//		fmt.Println(protocol.Msg_format("type", "snapshot"))
+//
+//}
 
 func demander_sc() {
 	msg := protocol.Msg_format("type", "fromapp_debut_sc")
@@ -72,11 +75,11 @@ func do_websocket(w http.ResponseWriter, r *http.Request, active chan bool) {
 			if suffix == "deactivate" {
 				liberer_sc("0")
 			}
-
 		case "data":
-			modify_data(suffix, active)
-		case "snap":
-			do_local_snapshot()
+			pendingOpe = suffix // en attente
+			demander_sc()
+			//case "snapshot":
+			//	do_local_snapshot()
 		}
 	}
 }
@@ -88,14 +91,12 @@ func ws_send(msg string) {
 	} else {
 		err := ws.WriteMessage(websocket.TextMessage, []byte(msg))
 		if err != nil {
-			//fmt.Println("ws_send", "WriteMessage : "+string(err.Error()))
-		} else {
-			//fmt.Println("ws_send", "sending "+msg)
+			return
 		}
 	}
 }
 
-func handle_ctl_msgs(active chan<- bool) {
+func handle_ctl_msgs(active chan bool) {
 	var msg string
 	for {
 		_, err := fmt.Scanln(&msg)
@@ -105,22 +106,25 @@ func handle_ctl_msgs(active chan<- bool) {
 		}
 		msg_type := protocol.Findval(msg, "type", "server")
 		msg_val := protocol.Findval(msg, "value", "server")
-
 		switch msg_type {
 		case "section_critique": // message sur la section critique
 			if msg_val == "true" {
 				in_section_critique = true
 				ws_send("info=debut section critique")
 				active <- true
+				if pendingOpe != "" { //si j'ai la section critique
+					modify_data(pendingOpe, active)
+					liberer_sc(pendingOpe) // je la libère
+					pendingOpe = ""
+				}
 			} else {
 				in_section_critique = false
 				ws_send("info=fin section critique")
 			}
-
 		case "data": // message sur l'update des données
 			lastOpe = msg_val
-			// indique a l'interface d'update les donnes
-			ws_send("data=" + msg_val)
+			ws_send("data=" + msg_val) // update les données dans le whiteboard
+			//modify_data(msg_val, active)
 		}
 
 	}
@@ -136,14 +140,11 @@ func wait_for_sc(active <-chan bool) bool {
 	return false
 }
 
-func modify_data(newOpe string, active <-chan bool) {
-	wait_for_sc(active)
-
+func modify_data(newOpe string, active chan bool) {
 	op := protocol.Findval(newOpe, "op", "server")
 	id := protocol.Findval(newOpe, "id", "server")
-
 	switch op {
-	case "add":
+	case "create":
 		parseShape, err := shape.ParseShape(newOpe)
 		if err != nil {
 			return
@@ -156,11 +157,9 @@ func modify_data(newOpe string, active <-chan bool) {
 		}
 	case "delete":
 		whiteboard.RemoveShape(id)
+	default:
+		display.Warning("server", "modify", "OP inconnue")
 	}
-
-	display.Info("", "modify_data", whiteboard.String())
-	liberer_sc(newOpe)
-
 }
 
 func main() {
