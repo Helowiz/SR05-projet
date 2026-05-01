@@ -47,16 +47,6 @@ func (s Shape) toString() string {
 }
 
 // Fonction utilitaire permettant de convertir une chaîne de caractères au format
-// "clé:valeur" en une paire clé-valeur
-func ParseEntry(entry string) (string, string, error) {
-	kv := strings.Split(entry, SHAPE_KEY_VALUE_SEP)
-	if len(kv) != 2 {
-		return "", "", fmt.Errorf("invalid entry: %s", entry)
-	}
-	return kv[0], kv[1], nil
-}
-
-// Fonction utilitaire permettant de convertir une chaîne de caractères au format
 // ";:clé:valeur;:clé:valeur;..." en un objet Shape
 func ParseShape(s string) (Shape, error) {
 	shape := Shape{}
