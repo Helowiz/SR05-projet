@@ -21,6 +21,8 @@ var lastOpe string = ""
 var in_section_critique bool = false
 var is_snaped = false
 var pendingOpe = ""
+var port *string
+var addr *string
 
 //func do_local_snapshot() {
 //
@@ -77,7 +79,7 @@ func do_websocket(w http.ResponseWriter, r *http.Request, active chan bool) {
 			}
 		case "data":
 			pendingOpe = suffix // en attente
-			demander_sc()
+			wait_for_sc(active)
 			//case "snapshot":
 			//	do_local_snapshot()
 		}
@@ -134,7 +136,7 @@ func handle_ctl_msgs(active chan bool) {
 func wait_for_sc(active <-chan bool) bool {
 	demander_sc()
 	if <-active { // on attend que quelqu'un envoi que la section critique est active
-		display.Info("", "wait_for_sc", "active channel read, returning True")
+		// display.Info("", "wait_for_sc", "active channel read, returning True")
 		return true
 	}
 	return false
@@ -166,8 +168,8 @@ func main() {
 	whiteboard = shape.Empty_board()
 	var active = make(chan bool)
 
-	var port = flag.String("port", "4444", "n° de port")
-	var addr = flag.String("addr", "localhost", "nom/adresse machine")
+	port = flag.String("port", "4444", "n° de port")
+	addr = flag.String("addr", "localhost", "nom/adresse machine")
 
 	flag.Parse()
 

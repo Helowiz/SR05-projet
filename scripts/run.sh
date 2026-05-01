@@ -21,7 +21,7 @@ if ! go build -o bin/app ../web/server.go; then
     exit 1
 fi
 
-if ! go build -o bin/ctl ../cmd/controler; then
+if ! go build -o bin/ctl ../cmd/controler/main.go; then
     echo "Erreur de compilation pour ctl"
     exit 1
 fi
