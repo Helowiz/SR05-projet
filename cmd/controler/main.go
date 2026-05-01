@@ -32,7 +32,7 @@ var app_en_sc bool = false                         // indique si l'app est en se
 
 var map_file = make(map[int]EltMapFile) // map pour la file d'attente
 
-var is_snapshot = false // couleur du site
+var is_snapshot = false
 
 /* Fonction utilitaire juste pour print la map file*/
 func map_file_to_string() string {
@@ -119,6 +119,12 @@ func parse_ctl_message(msg string) {
 		rec_fin_sc(est)
 		send_to_app("data", newData)
 
+	case "snapshot":
+		if !is_snapshot {
+			send_to_app("snapshot", "")
+			envoyer_tous("snapshot")
+			is_snapshot = true
+		}
 	default:
 		//display.Info(proc_name, "parse_message", "Message ignore"+msg_content)
 		return
@@ -141,6 +147,9 @@ func parse_app_msg(msg string) {
 			return
 		}
 		app_fin_sc(newData)
+	case "snapshot":
+		display.Info(proc_name, "parse_app_message", "envoyer à otut le monde")
+		envoyer_tous("snapshot")
 
 	default:
 		//display.Info(proc_name, "parse_app_message", "Message ignore : "+msg)

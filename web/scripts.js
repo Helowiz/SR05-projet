@@ -1075,7 +1075,7 @@ function addToLog(message) {
 document.getElementById("snapshot").onclick = function (evt) {
     if (ws) {
         addToLog("[OUT] SNAPSHOT");
-        ws.send("snap" + MSG_KEY_VALUE_SEP + "true");
+        ws.send("snapshot" + MSG_KEY_VALUE_SEP + "true");
         return
     }
     addToLog("SNAPSHOT IMPOSSIBLE : ws close");

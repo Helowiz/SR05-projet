@@ -141,7 +141,7 @@ func (wb *WhiteBoard) AddShape(id string, shape Shape) {
 	} else {
 		wb.Shapes[id] = shape
 	}
-	display.Info("", "addShape", wb.String())
+	//display.Info("", "addShape", wb.String())
 }
 
 // Méthode permettant de supprimer une forme du tableau blanc à partir de son ID

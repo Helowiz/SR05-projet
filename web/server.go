@@ -4,6 +4,7 @@ import (
 	"SR05_projet/display"
 	"SR05_projet/protocol"
 	"SR05_projet/shape"
+	"SR05_projet/snapshot"
 	"flag"
 	"fmt"
 	"net/http"
@@ -23,13 +24,14 @@ var is_snaped = false
 var pendingOpe = ""
 var port *string
 var addr *string
+var id *string
 
-//func do_local_snapshot() {
-//
-//		display.Info("SNAP", "snapshot", whiteboard.String())
-//		fmt.Println(protocol.Msg_format("type", "snapshot"))
-//
-//}
+func do_local_snapshot() {
+	if is_snaped {
+		fmt.Println(protocol.Msg_format("type", "snapshot"))
+	}
+	snapshot.Shot(whiteboard, *id)
+}
 
 func demander_sc() {
 	msg := protocol.Msg_format("type", "fromapp_debut_sc")
@@ -79,9 +81,12 @@ func do_websocket(w http.ResponseWriter, r *http.Request, active chan bool) {
 			}
 		case "data":
 			pendingOpe = suffix // en attente
-			wait_for_sc(active)
-			//case "snapshot":
-			//	do_local_snapshot()
+			demander_sc()
+			//wait_for_sc(active)
+
+		case "snapshot":
+			is_snaped = true
+			do_local_snapshot()
 		}
 	}
 }
@@ -113,9 +118,9 @@ func handle_ctl_msgs(active chan bool) {
 			if msg_val == "true" {
 				in_section_critique = true
 				ws_send("info=debut section critique")
-				active <- true
+				//active <- true
 				if pendingOpe != "" { //si j'ai la section critique
-					modify_data(pendingOpe, active)
+					//modify_data(pendingOpe, active)
 					liberer_sc(pendingOpe) // je la libère
 					pendingOpe = ""
 				}
@@ -127,6 +132,9 @@ func handle_ctl_msgs(active chan bool) {
 			lastOpe = msg_val
 			ws_send("data=" + msg_val) // update les données dans le whiteboard
 			modify_data(msg_val, active)
+
+		case "snapshot":
+			do_local_snapshot()
 		}
 
 	}
@@ -172,6 +180,7 @@ func main() {
 
 	port = flag.String("port", "4444", "n° de port")
 	addr = flag.String("addr", "localhost", "nom/adresse machine")
+	id = flag.String("id", "", "nom id")
 
 	flag.Parse()
 
