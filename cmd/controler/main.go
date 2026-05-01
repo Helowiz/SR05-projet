@@ -91,7 +91,7 @@ func estampille_from_msg(msg string) (Estampille, error) {
 
 /* Traite un message recu d'une autre application de controle */
 func parse_ctl_message(msg string) {
-	//display.Info(proc_name, "parse_ctl_msg", "Parsing : "+msg)
+	// display.Info(proc_name, "parse_ctl_msg", "Parsing : "+msg)
 	est, err := estampille_from_msg(msg)
 	msg_content := protocol.Findval(msg, "msg", "")
 
