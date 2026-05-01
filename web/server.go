@@ -29,7 +29,14 @@ func liberer_sc(newData string) {
 }
 
 func do_webserver(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintf(w, "Bonjour depuis le serveur web en Go !")
+	content, err := os.ReadFile("../web/client.html")
+	if err != nil {
+		http.Error(w, "Impossible de lire le fichier HTML", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/html")
+	w.Write(content)
 }
 
 func do_websocket(w http.ResponseWriter, r *http.Request, active chan bool) {
