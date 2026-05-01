@@ -3,6 +3,7 @@ package main
 import (
 	"SR05_projet/display"
 	"SR05_projet/protocol"
+	"SR05_projet/shape"
 	"flag"
 	"fmt"
 	"net/http"
@@ -15,7 +16,8 @@ import (
 
 var ws *websocket.Conn = nil
 
-var data int
+var whiteboard shape.WhiteBoard
+var lastOpe string = ""
 var in_section_critique bool = false
 
 func demander_sc() {
@@ -23,8 +25,8 @@ func demander_sc() {
 	fmt.Println(msg)
 }
 
-func liberer_sc(newData string) {
-	msg := protocol.Msg_format("type", "fromapp_fin_sc") + protocol.Msg_format("data", newData)
+func liberer_sc(newOpe string) {
+	msg := protocol.Msg_format("type", "fromapp_fin_sc") + protocol.Msg_format("data", newOpe)
 	fmt.Println(msg)
 }
 
@@ -43,7 +45,7 @@ func do_websocket(w http.ResponseWriter, r *http.Request, active chan bool) {
 
 		return
 	}
-	ws_send("data=" + strconv.Itoa(data))
+	ws_send("data=" + lastOpe)
 
 	for {
 		_, message, err := cnx.ReadMessage()
@@ -53,7 +55,7 @@ func do_websocket(w http.ResponseWriter, r *http.Request, active chan bool) {
 		}
 		//fmt.Println("réception : " + string(message))
 		parts := strings.Split(string(message), "=")
-		prefix, suffix := parts[0], parts[1]
+		prefix, suffix := parts[0], strings.TrimSpace(parts[1])
 		display.Info("", "do_websocket", "received : "+string(message))
 
 		switch string(prefix) {
@@ -66,13 +68,8 @@ func do_websocket(w http.ResponseWriter, r *http.Request, active chan bool) {
 			}
 
 		case "data":
-			newData, err := strconv.Atoi(suffix)
-			if err != nil {
-				display.Error("", "do_websocket", "data could not be converted")
-				return
-			}
-			modify_data(newData, active)
-			//display.Info("", "do_websocket", "new data : "+strconv.Itoa(newData))
+			modify_data(suffix, active)
+			// display.Info("", "do_websocket", "new data : "+strconv.Itoa(newData))
 
 		}
 	}
@@ -115,14 +112,9 @@ func handle_ctl_msgs(active chan<- bool) {
 			}
 
 		case "data": // message sur l'update des données
-			newData, err := strconv.Atoi(msg_val)
-			if err != nil {
-				display.Error("", "handle_ctl_msgs", "data could not be converted")
-				return
-			}
-			data = newData
+			lastOpe = msg_val
 			// indique a l'interface d'update les donnes
-			ws_send("data=" + strconv.Itoa(newData))
+			ws_send("data=" + msg_val)
 		}
 
 	}
@@ -138,16 +130,16 @@ func wait_for_sc(active <-chan bool) bool {
 	return false
 }
 
-func modify_data(newData int, active <-chan bool) {
+func modify_data(newOpe string, active <-chan bool) {
 	wait_for_sc(active)
 	//
 	// give back section critique
-	liberer_sc(strconv.Itoa(newData))
+	liberer_sc(newOpe)
 
 }
 
 func main() {
-	data = 0
+	whiteboard = shape.Empty_board()
 	var active chan bool = make(chan bool)
 
 	var port = flag.String("port", "4444", "n° de port")
