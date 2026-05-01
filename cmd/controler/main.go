@@ -32,6 +32,8 @@ var app_en_sc bool = false                         // indique si l'app est en se
 
 var map_file = make(map[int]EltMapFile) // map pour la file d'attente
 
+var is_snapshot = false // couleur du site
+
 /* Fonction utilitaire juste pour print la map file*/
 func map_file_to_string() string {
 	var sb strings.Builder
@@ -45,10 +47,10 @@ func map_file_to_string() string {
 
 /* Check si j'ai la plus petite estampille et que j'ai bien tout les sites dans la map*/
 func smallest_estampille() bool {
-	display.Info(proc_name, "smallest_estampille", "Test estampille : \n"+map_file_to_string())
+	//display.Info(proc_name, "smallest_estampille", "Test estampille : \n"+map_file_to_string())
 
 	if len(map_file) != n_sites {
-		display.Info(proc_name, "smallest_estampille", "Pas encore decouvert tout le réseau")
+		//display.Info(proc_name, "smallest_estampille", "Pas encore decouvert tout le réseau")
 		return false
 	}
 
@@ -89,7 +91,7 @@ func estampille_from_msg(msg string) (Estampille, error) {
 
 /* Traite un message recu d'une autre application de controle */
 func parse_ctl_message(msg string) {
-	display.Info(proc_name, "parse_ctl_msg", "Parsing : "+msg)
+	//display.Info(proc_name, "parse_ctl_msg", "Parsing : "+msg)
 	est, err := estampille_from_msg(msg)
 	msg_content := protocol.Findval(msg, "msg", "")
 
@@ -118,7 +120,7 @@ func parse_ctl_message(msg string) {
 		send_to_app("data", newData)
 
 	default:
-		display.Info(proc_name, "parse_message", "Message ignore"+msg_content)
+		//display.Info(proc_name, "parse_message", "Message ignore"+msg_content)
 		return
 
 	}
@@ -127,7 +129,7 @@ func parse_ctl_message(msg string) {
 
 /* Traite un message recu de l'application de base */
 func parse_app_msg(msg string) {
-	display.Info(proc_name, "parse_app_msg", "Parsing : "+msg)
+	//display.Info(proc_name, "parse_app_msg", "Parsing : "+msg)
 	type_msg := protocol.Findval(msg, "type", proc_name) // s'il retourne vide on ignore le message de toute facon
 	switch type_msg {
 	case "fromapp_debut_sc":
@@ -141,7 +143,7 @@ func parse_app_msg(msg string) {
 		app_fin_sc(newData)
 
 	default:
-		display.Info(proc_name, "parse_app_message", "Message ignore : "+msg)
+		//display.Info(proc_name, "parse_app_message", "Message ignore : "+msg)
 		return
 	}
 }
@@ -184,7 +186,7 @@ func forward(msg string) {
 /* Previens l'application de base qu'on est en section critique*/
 func debut_sc_app() {
 	if !app_en_sc {
-		display.Info(proc_name, "debut_sc", "Entree SC")
+		//display.Info(proc_name, "debut_sc", "Entree SC")
 		send_to_app("section_critique", "true")
 		app_en_sc = true
 	}
@@ -193,7 +195,7 @@ func debut_sc_app() {
 /* Previens l'application de base qu'on est en fin de section critique*/
 func fin_sc_app(newData string) {
 	if app_en_sc {
-		display.Info(proc_name, "fin_sc", "Fin SC")
+		//display.Info(proc_name, "fin_sc", "Fin SC")
 
 		// envoi le message a l'app que c'est la fin de la sc
 		send_to_app("section_critique", "false")
@@ -239,7 +241,7 @@ func rec_dem_sc(est Estampille) {
 
 /* Reception d'une fin de section critique d'un autre site */
 func rec_fin_sc(est Estampille) {
-	display.Info(proc_name, "rec_fin_sc", "")
+	//display.Info(proc_name, "rec_fin_sc", "")
 
 	h = protocol.Recaler(h, est.val_h)
 	map_file[est.id_site] = EltMapFile{"liberation", est.val_h}
@@ -255,7 +257,7 @@ func rec_fin_sc(est Estampille) {
 
 /* Reception d'un accuse de reception d'un autre site */
 func rec_accuse_sc(est Estampille) {
-	display.Info(proc_name, "rec_accuse_sc", "Reception accuse")
+	//display.Info(proc_name, "rec_accuse_sc", "Reception accuse")
 	h = protocol.Recaler(h, est.val_h)
 	// si le site n'exist pas encore dans la map on l'ajoute
 	if _, ok := map_file[est.id_site]; !ok {
@@ -267,7 +269,7 @@ func rec_accuse_sc(est Estampille) {
 			map_file[est.id_site] = EltMapFile{"accuse", est.val_h}
 		}
 	}
-	display.Info(proc_name, "rec_accuse_sc", strconv.FormatBool(smallest_estampille())+map_file[this_id].msg_type)
+	//display.Info(proc_name, "rec_accuse_sc", strconv.FormatBool(smallest_estampille())+map_file[this_id].msg_type)
 
 	// verifier si l'arrivee de ce message nous permet de passer en SC
 	// j'ai envoye une requete et j'ai la plus petite estampille
@@ -275,6 +277,9 @@ func rec_accuse_sc(est Estampille) {
 
 		debut_sc_app()
 	}
+}
+
+func snapshot_local() {
 
 }
 
@@ -292,7 +297,7 @@ func main() {
 	// on note le nombre de sites
 	n_sites = *p_nbsites
 
-	display.Info(proc_name, "main", "Démarrage du contrôleur...")
+	display.Info(proc_name, "", "Démarrage du contrôleur...")
 
 	var rcvmsg string // message recu
 

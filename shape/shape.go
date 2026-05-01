@@ -3,6 +3,7 @@ package shape
 import (
 	"SR05_projet/display"
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -42,7 +43,6 @@ func (s Shape) toString() string {
 		str += SHAPE_ENTRY_SEP + SHAPE_KEY_VALUE_SEP + "val" + SHAPE_KEY_VALUE_SEP + s.Val
 		str += SHAPE_ENTRY_SEP + SHAPE_KEY_VALUE_SEP + "size" + SHAPE_KEY_VALUE_SEP + strconv.Itoa(s.Size)
 	}
-
 	return str
 }
 
@@ -128,7 +128,7 @@ func Empty_board() WhiteBoard {
 }
 
 // Méthode permettant d'ajouter une forme au tableau blanc
-func (wb *WhiteBoard) addShape(id string, shape Shape) {
+func (wb *WhiteBoard) AddShape(id string, shape Shape) {
 	if _, exists := wb.Shapes[id]; exists {
 		display.Error("", "addShape", fmt.Sprintf("Shape with id %s already exists", id))
 	} else {
@@ -137,7 +137,7 @@ func (wb *WhiteBoard) addShape(id string, shape Shape) {
 }
 
 // Méthode permettant de supprimer une forme du tableau blanc à partir de son ID
-func (wb *WhiteBoard) removeShape(id string) {
+func (wb *WhiteBoard) RemoveShape(id string) {
 	if _, exists := wb.Shapes[id]; exists {
 		delete(wb.Shapes, id)
 	} else {
@@ -146,7 +146,7 @@ func (wb *WhiteBoard) removeShape(id string) {
 }
 
 // Méthode permettant de mettre à jour une forme du tableau blanc à partir de son ID et d'une nouvelle forme
-func (wb *WhiteBoard) updateShape(id string, key string, value string) {
+func (wb *WhiteBoard) UpdateShape(id string, key string, value string) {
 	if shape, exists := wb.Shapes[id]; exists {
 		err := shape.set(key, value)
 		if err != nil {
@@ -157,4 +157,56 @@ func (wb *WhiteBoard) updateShape(id string, key string, value string) {
 	} else {
 		display.Error("", "updateShape", fmt.Sprintf("Shape with id %s does not exist", id))
 	}
+}
+
+// to string d'un whiteboard
+func (wb *WhiteBoard) String() string {
+	if len(wb.Shapes) == 0 {
+		return "WhiteBoard (vide)"
+	}
+
+	keys := make([]string, 0, len(wb.Shapes))
+	for k := range wb.Shapes {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	var builder strings.Builder
+	builder.WriteString("WhiteBoard contient les formes suivantes :\n")
+
+	for _, k := range keys {
+		builder.WriteString(fmt.Sprintf("  - ID: %s | Forme: %v\n", k, wb.Shapes[k]))
+	}
+
+	return builder.String()
+}
+
+// parse les données à mettre à jours
+func GetUpdateFields(msg string) map[string]string {
+	updates := make(map[string]string)
+	entries := strings.Split(msg, SHAPE_ENTRY_SEP)
+
+	for _, entry := range entries {
+		if entry == "" {
+			continue
+		}
+
+		cleanEntry := strings.TrimPrefix(entry, SHAPE_KEY_VALUE_SEP)
+
+		kv := strings.SplitN(cleanEntry, SHAPE_KEY_VALUE_SEP, 2)
+
+		if len(kv) != 2 {
+			continue
+		}
+
+		key, value := kv[0], kv[1]
+
+		if key == "op" || key == "id" {
+			continue
+		}
+
+		updates[key] = value
+	}
+
+	return updates
 }

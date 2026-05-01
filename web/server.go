@@ -19,6 +19,12 @@ var ws *websocket.Conn = nil
 var whiteboard shape.WhiteBoard
 var lastOpe string = ""
 var in_section_critique bool = false
+var is_snaped = false
+
+func do_local_snapshot() {
+	is_snaped = true
+	display.Info("WHITE", "SERVER", "snapshot = "+whiteboard.String())
+}
 
 func demander_sc() {
 	msg := protocol.Msg_format("type", "fromapp_debut_sc")
@@ -58,7 +64,7 @@ func do_websocket(w http.ResponseWriter, r *http.Request, active chan bool) {
 		prefix, suffix := parts[0], strings.TrimSpace(parts[1])
 		display.Info("", "do_websocket", "received : "+string(message))
 
-		switch string(prefix) {
+		switch prefix {
 		case "section_critique": // juste pour le debug, a enlever ce cas apres
 			if suffix == "activate" {
 				demander_sc()
@@ -69,8 +75,8 @@ func do_websocket(w http.ResponseWriter, r *http.Request, active chan bool) {
 
 		case "data":
 			modify_data(suffix, active)
-			// display.Info("", "do_websocket", "new data : "+strconv.Itoa(newData))
-
+		case "snap":
+			do_local_snapshot()
 		}
 	}
 }
@@ -132,23 +138,48 @@ func wait_for_sc(active <-chan bool) bool {
 
 func modify_data(newOpe string, active <-chan bool) {
 	wait_for_sc(active)
-	//
-	// give back section critique
+
+	op := protocol.Findval(newOpe, "op", "server")
+	id := protocol.Findval(newOpe, "id", "server")
+
+	switch op {
+	case "add":
+		parseShape, err := shape.ParseShape(newOpe)
+		if err != nil {
+			return
+		}
+		whiteboard.AddShape(id, parseShape)
+	case "update":
+		updates := shape.GetUpdateFields(newOpe)
+		for key, value := range updates {
+			whiteboard.UpdateShape(id, key, value)
+		}
+	case "delete":
+		whiteboard.RemoveShape(id)
+	}
+
+	display.Info("", "modify_data", whiteboard.String())
 	liberer_sc(newOpe)
 
 }
 
 func main() {
 	whiteboard = shape.Empty_board()
-	var active chan bool = make(chan bool)
+	var active = make(chan bool)
 
 	var port = flag.String("port", "4444", "n° de port")
 	var addr = flag.String("addr", "localhost", "nom/adresse machine")
 
 	flag.Parse()
 
+	display.Info("app", "main", "Démarrage du serveur "+*port)
+
 	http.HandleFunc("/", do_webserver)
 	http.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) { do_websocket(w, r, active) })
 	go handle_ctl_msgs(active)
-	http.ListenAndServe(*addr+":"+*port, nil)
+
+	err := http.ListenAndServe(*addr+":"+*port, nil)
+	if err != nil {
+		return
+	}
 }
