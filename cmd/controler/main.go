@@ -89,7 +89,7 @@ func estampille_from_msg(msg string) (Estampille, error) {
 
 /* Traite un message recu d'une autre application de controle */
 func parse_ctl_message(msg string) {
-	display.Info(proc_name, "parse_ctl_msg", "Parsing : "+msg)
+	// display.Info(proc_name, "parse_ctl_msg", "Parsing : "+msg)
 	est, err := estampille_from_msg(msg)
 	msg_content := protocol.Findval(msg, "msg", "")
 
@@ -118,7 +118,7 @@ func parse_ctl_message(msg string) {
 		send_to_app("data", newData)
 
 	default:
-		display.Info(proc_name, "parse_message", "Message ignore"+msg_content)
+		// display.Info(proc_name, "parse_message", "Message ignore"+msg_content)
 		return
 
 	}
@@ -127,7 +127,7 @@ func parse_ctl_message(msg string) {
 
 /* Traite un message recu de l'application de base */
 func parse_app_msg(msg string) {
-	display.Info(proc_name, "parse_app_msg", "Parsing : "+msg)
+	// display.Info(proc_name, "parse_app_msg", "Parsing : "+msg)
 	type_msg := protocol.Findval(msg, "type", proc_name) // s'il retourne vide on ignore le message de toute facon
 	switch type_msg {
 	case "fromapp_debut_sc":
@@ -141,7 +141,7 @@ func parse_app_msg(msg string) {
 		app_fin_sc(newData)
 
 	default:
-		display.Info(proc_name, "parse_app_message", "Message ignore : "+msg)
+		// display.Info(proc_name, "parse_app_message", "Message ignore : "+msg)
 		return
 	}
 }
@@ -239,7 +239,7 @@ func rec_dem_sc(est Estampille) {
 
 /* Reception d'une fin de section critique d'un autre site */
 func rec_fin_sc(est Estampille) {
-	display.Info(proc_name, "rec_fin_sc", "")
+	// display.Info(proc_name, "rec_fin_sc", "")
 
 	h = protocol.Recaler(h, est.val_h)
 	map_file[est.id_site] = EltMapFile{"liberation", est.val_h}
