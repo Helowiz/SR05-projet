@@ -126,7 +126,7 @@ func handle_ctl_msgs(active chan bool) {
 		case "data": // message sur l'update des données
 			lastOpe = msg_val
 			ws_send("data=" + msg_val) // update les données dans le whiteboard
-			//modify_data(msg_val, active)
+			modify_data(msg_val, active)
 		}
 
 	}
