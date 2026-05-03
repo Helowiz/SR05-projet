@@ -20,17 +20,29 @@ var ws *websocket.Conn = nil
 var whiteboard shape.WhiteBoard
 var lastOpe string = ""
 var in_section_critique bool = false
-var is_snaped = false
+
 var pendingOpe = ""
 var port *string
 var addr *string
 var id *string
 
-func do_local_snapshot() {
-	if is_snaped {
-		fmt.Println(protocol.Msg_format("type", "snapshot"))
+var initiate = false
+
+func doLocalSnapshot() {
+	snap, err := snapshot.SnapshotToString(snapshot.Shot(whiteboard, *id)) // prend la snapshot et la mets en String pour l'envoyer
+	if err != nil {
+		display.Error("snapshot", "doLocalSnapshot", err.Error())
+		return
 	}
-	snapshot.Shot(whiteboard, *id)
+
+	// envoie la snapshot
+	msgType := "snapshot"
+	if initiate {
+		initiate = false
+		msgType = "snapshot_init"
+	}
+	msg := protocol.Msg_format("type", msgType) + protocol.Msg_format("snap", snap)
+	fmt.Println(msg)
 }
 
 func demander_sc() {
@@ -85,8 +97,8 @@ func do_websocket(w http.ResponseWriter, r *http.Request, active chan bool) {
 			//wait_for_sc(active)
 
 		case "snapshot":
-			is_snaped = true
-			do_local_snapshot()
+			initiate = true
+			doLocalSnapshot()
 		}
 	}
 }
@@ -134,9 +146,8 @@ func handle_ctl_msgs(active chan bool) {
 			modify_data(msg_val, active)
 
 		case "snapshot":
-			do_local_snapshot()
+			doLocalSnapshot()
 		}
-
 	}
 }
 

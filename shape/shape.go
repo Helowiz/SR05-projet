@@ -137,7 +137,7 @@ func Empty_board() WhiteBoard {
 // Méthode permettant d'ajouter une forme au tableau blanc
 func (wb *WhiteBoard) AddShape(id string, shape Shape) {
 	if _, exists := wb.Shapes[id]; exists {
-		display.Error("", "addShape", fmt.Sprintf("Shape with id %s already exists", id))
+		display.Warning("", "addShape", fmt.Sprintf("Shape with id %s already exists", id))
 	} else {
 		wb.Shapes[id] = shape
 	}

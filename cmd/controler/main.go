@@ -3,6 +3,7 @@ package main
 import (
 	"SR05_projet/display"
 	"SR05_projet/protocol"
+	"SR05_projet/snapshot"
 	"errors"
 	"flag"
 	"fmt"
@@ -32,7 +33,13 @@ var app_en_sc bool = false                         // indique si l'app est en se
 
 var map_file = make(map[int]EltMapFile) // map pour la file d'attente
 
-var is_snapshot = false
+// Pour la snapshot
+var isInit = false
+var isSnapshot = false
+var globalSnapshot []snapshot.Snapshot
+var localSnapshot *snapshot.Snapshot
+var nbEtatAttendus = 0
+var initiateID = -1
 
 /* Fonction utilitaire juste pour print la map file*/
 func map_file_to_string() string {
@@ -119,12 +126,38 @@ func parse_ctl_message(msg string) {
 		rec_fin_sc(est)
 		send_to_app("data", newData)
 
-	case "snapshot":
-		if !is_snapshot {
-			send_to_app("snapshot", "")
-			envoyer_tous("snapshot")
-			is_snapshot = true
+	case "snapshot": // il faut faire une snapshot
+		h = protocol.Recaler(h, est.val_h) // on s'accord avec les autres
+		if !isSnapshot {
+			initiatorID := protocol.Findval(msg, "initiator", proc_name) // on définit à qui on doit envoyer la snapshot
+			if initiatorID != "" {
+				initiateID, _ = strconv.Atoi(initiatorID)
+			} else {
+				display.Error(proc_name, "parse_ctl_msg", "Snapshot sans ID de initialisateur")
+			}
+			send_to_app("snapshot", "") // on prend la snapshot
+			isSnapshot = true
 		}
+	case "snapshot_state":
+		h = protocol.Recaler(h, est.val_h) // on se synchronise
+		if isInit {                        // c'est l'initateur qui rassemble toutes les snapshot
+			receiveSnapshot, _ := snapshot.StringToSnapshot(protocol.Findval(msg, "snap", proc_name)) // Snapshot prise
+			globalSnapshot = append(globalSnapshot, *receiveSnapshot)
+			nbEtatAttendus = nbEtatAttendus - 1
+			if nbEtatAttendus == 0 {
+				snapshot.SaveGlobalSnapshot(globalSnapshot)
+				isInit = false
+				isSnapshot = false
+				globalSnapshot = nil
+				initiateID = -1
+				h++
+				envoyer_tous("snapshot_reset")
+			}
+		}
+	case "snapshot_reset":
+		h = protocol.Recaler(h, est.val_h)
+		isSnapshot = false
+		initiateID = -1
 	default:
 		//display.Info(proc_name, "parse_message", "Message ignore"+msg_content)
 		return
@@ -147,9 +180,21 @@ func parse_app_msg(msg string) {
 			return
 		}
 		app_fin_sc(newData)
-	case "snapshot":
-		display.Info(proc_name, "parse_app_message", "envoyer à otut le monde")
-		envoyer_tous("snapshot")
+
+	case "snapshot": //type=snapshot snap=localsnapshot
+		appSnapshot := protocol.Findval(msg, "snap", proc_name)
+		msg = "snapshot_state" + protocol.Msg_format("snap", appSnapshot)
+		h++                      // on avance
+		envoyer(msg, initiateID) // on envoie la snapshot à l'initiateur
+	case "snapshot_init":
+		isInit = true
+		isSnapshot = true
+		initiateID = this_id
+		nbEtatAttendus = n_sites - 1
+		localSnapshot, _ = snapshot.StringToSnapshot(protocol.Findval(msg, "snap", proc_name)) // Snapshot prise
+		globalSnapshot = append(globalSnapshot, *localSnapshot)
+		h++                                                                                // on avance
+		envoyer_tous("snapshot" + protocol.Msg_format("initiator", strconv.Itoa(this_id))) // on dit à tous le monde de faire une snapshot
 
 	default:
 		//display.Info(proc_name, "parse_app_message", "Message ignore : "+msg)
@@ -288,10 +333,6 @@ func rec_accuse_sc(est Estampille) {
 	}
 }
 
-func snapshot_local() {
-
-}
-
 func main() {
 
 	// arguments en entree
@@ -318,7 +359,7 @@ func main() {
 			//return
 		}
 
-		//display.Info(*p_nom, "reception", "Reçu brut : "+rcvmsg)
+		display.Info(*p_nom, "reception", "Reçu brut : "+rcvmsg)
 
 		// reception d'un autre site
 		if is_ctl_message(rcvmsg) {
