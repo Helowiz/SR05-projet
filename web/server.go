@@ -28,7 +28,7 @@ var id *string
 
 var initiate = false
 
-func doLocalSnapshot() {
+func doLocalSnapshot(color string) {
 	snap, err := snapshot.SnapshotToString(snapshot.Shot(whiteboard, *id)) // prend la snapshot et la mets en String pour l'envoyer
 	if err != nil {
 		display.Error("snapshot", "doLocalSnapshot", err.Error())
@@ -38,10 +38,11 @@ func doLocalSnapshot() {
 	// envoie la snapshot
 	msgType := "snapshot"
 	if initiate {
-		initiate = false
+		initiate = false // reset pour prochaine snapshot
+		color = "rouge"
 		msgType = "snapshot_init"
 	}
-	msg := protocol.Msg_format("type", msgType) + protocol.Msg_format("snap", snap)
+	msg := protocol.Msg_format("type", msgType) + protocol.Msg_format("snap", snap) + protocol.Msg_format("color", color)
 	fmt.Println(msg)
 }
 
@@ -146,7 +147,8 @@ func handle_ctl_msgs(active chan bool) {
 			modify_data(msg_val, active)
 
 		case "snapshot":
-			doLocalSnapshot()
+			color := protocol.Findval(msg, "color", "server")
+			doLocalSnapshot(color)
 		}
 	}
 }

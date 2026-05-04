@@ -33,13 +33,19 @@ var app_en_sc bool = false                         // indique si l'app est en se
 
 var map_file = make(map[int]EltMapFile) // map pour la file d'attente
 
-// Pour la snapshot
-var isInit = false
-var isSnapshot = false
-var globalSnapshot []snapshot.Snapshot
-var localSnapshot *snapshot.Snapshot
-var nbEtatAttendus = 0
-var initiateID = -1
+// Snapshot
+const WHITE string = "blanc"
+const RED string = "rouge"
+
+var color = WHITE
+var initiator = false
+var total = 0
+var globalState []snapshot.Snapshot
+
+var nbStateExpected int
+var nbMsgExpected int
+
+var initiatorID int
 
 /* Fonction utilitaire juste pour print la map file*/
 func map_file_to_string() string {
@@ -126,19 +132,7 @@ func parse_ctl_message(msg string) {
 		rec_fin_sc(est)
 		send_to_app("data", newData)
 
-	case "snapshot": // il faut faire une snapshot
-		h = protocol.Recaler(h, est.val_h) // on s'accord avec les autres
-		if !isSnapshot {
-			initiatorID := protocol.Findval(msg, "initiator", proc_name) // on définit à qui on doit envoyer la snapshot
-			if initiatorID != "" {
-				initiateID, _ = strconv.Atoi(initiatorID)
-			} else {
-				display.Error(proc_name, "parse_ctl_msg", "Snapshot sans ID de initialisateur")
-			}
-			send_to_app("snapshot", "") // on prend la snapshot
-			isSnapshot = true
-		}
-	case "snapshot_state":
+	case "state":
 		h = protocol.Recaler(h, est.val_h) // on se synchronise
 		if isInit {                        // c'est l'initateur qui rassemble toutes les snapshot
 			receiveSnapshot, _ := snapshot.StringToSnapshot(protocol.Findval(msg, "snap", proc_name)) // Snapshot prise
@@ -170,6 +164,21 @@ func parse_ctl_message(msg string) {
 func parse_app_msg(msg string) {
 	//display.Info(proc_name, "parse_app_msg", "Parsing : "+msg)
 	type_msg := protocol.Findval(msg, "type", proc_name) // s'il retourne vide on ignore le message de toute facon
+	appColor := protocol.Findval(msg, "color", color)
+
+	if appColor == RED && color == WHITE { // signal pour prendre une snapshot
+		color = RED
+		localSnapshot, _ := snapshot.StringToSnapshot(protocol.Findval(msg, "snap", proc_name)) // Snapshot prise
+		globalState = append(globalState, *localSnapshot)
+		msgSend := protocol.Msg_format("type", "state") + protocol.Msg_format("global_state", globalState) + protocol.Msg_format("total", strconv.Itoa(total))
+		envoyer(msgSend, initiatorID)
+	}
+
+	if appColor == WHITE && color == RED { // msg prepost
+		msgSend := protocol.Msg_format("type", "prepost") + protocol.Msg_format("value", msg)
+		envoyer_tous(msgSend)
+	}
+
 	switch type_msg {
 	case "fromapp_debut_sc":
 		app_dem_sc()
@@ -180,22 +189,14 @@ func parse_app_msg(msg string) {
 			return
 		}
 		app_fin_sc(newData)
-
-	case "snapshot": //type=snapshot snap=localsnapshot
-		appSnapshot := protocol.Findval(msg, "snap", proc_name)
-		msg = "snapshot_state" + protocol.Msg_format("snap", appSnapshot)
-		h++                      // on avance
-		envoyer(msg, initiateID) // on envoie la snapshot à l'initiateur
 	case "snapshot_init":
-		isInit = true
-		isSnapshot = true
-		initiateID = this_id
-		nbEtatAttendus = n_sites - 1
-		localSnapshot, _ = snapshot.StringToSnapshot(protocol.Findval(msg, "snap", proc_name)) // Snapshot prise
-		globalSnapshot = append(globalSnapshot, *localSnapshot)
-		h++                                                                                // on avance
-		envoyer_tous("snapshot" + protocol.Msg_format("initiator", strconv.Itoa(this_id))) // on dit à tous le monde de faire une snapshot
-
+		initiator = true
+		localSnapshot, _ := snapshot.StringToSnapshot(protocol.Findval(msg, "snap", proc_name)) // Snapshot prise
+		globalState = append(globalState, *localSnapshot)
+		nbStateExpected = n_sites - 1
+		nbMsgExpected = total
+		initiatorID = this_id
+		envoyer_tous("snapshot" + protocol.Msg_format("initiator", strconv.Itoa(this_id))) // on dit à tout le monde de faire une snapshot
 	default:
 		//display.Info(proc_name, "parse_app_message", "Message ignore : "+msg)
 		return
@@ -229,7 +230,8 @@ func envoyer_liberation(newData string) {
 
 /* Envoi un message a l'app (just stdout car l'app y est connectee) */
 func send_to_app(msg_type string, value string) {
-	fmt.Println(protocol.Msg_format("type", msg_type) + protocol.Msg_format("value", value))
+	fmt.Println(protocol.Msg_format("type", msg_type) + protocol.Msg_format("value", value) + protocol.Msg_format("color", color)) //ajout couleur pour la snapshot
+	total++                                                                                                                        // pour la snapshot
 }
 
 /* Route le message sans modifs aux successeurs*/
@@ -395,6 +397,7 @@ func main() {
 
 		} else { // reception de l'application de base
 			h++
+			total-- // pour la snapshot
 			parse_app_msg(rcvmsg)
 		}
 	}

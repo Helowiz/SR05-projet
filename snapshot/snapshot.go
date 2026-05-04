@@ -86,3 +86,13 @@ func StringToSnapshot(data string) (*Snapshot, error) {
 	}
 	return &snap, nil
 }
+
+func globalToString(globalSnapshot *[]Snapshot) string {
+	for _, snap := range *globalSnapshot {
+		data, err := json.Marshal(snap)
+		if err != nil {
+			return ""
+		}
+		return string(data)
+	}
+}
