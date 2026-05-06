@@ -47,7 +47,6 @@ function decode(str) {
 let shapes = {}; // { id: shapeObject }
 let selectedId = null;
 let tool = "select";
-let idCounter = 0; // A tout moment, correspond au nombre de formes créées depuis le début de la session (y compris celles qui ont été supprimées, sauf si CLEAR? -> TODO), et sert à générer des IDs uniques pour les nouvelles formes.
 
 // Etats d'interaction
 let isMouseDown = false;
@@ -55,14 +54,6 @@ let mouseStart = { x: 0, y: 0 };
 let lastMousePos = { x: 0, y: 0 };
 let drawState = null; // while creating a shape by drag
 let dragState = null; // while moving / resizing
-
-// Génère un ID unique pour une nouvelle forme,
-// en utilisant un compteur incrémental.
-// Paramètres : aucun
-// Retourne : une chaîne de caractères représentant l'ID unique de la forme, au format "shape-XXXX" où XXXX est un nombre à 4 chiffres.
-function generateId() {
-  return "shape-" + (++idCounter).toString().padStart(4, "0");
-}
 
 // ==================================================
 // MISE EN PLACE DU WHITE BOARD
@@ -520,7 +511,7 @@ canvas.addEventListener("mousedown", (e) => {
   } else if (tool === "text") {
     const val = prompt("Enter text:", "Text");
     if (val !== null) {
-      const id = generateId();
+      const id = crypto.randomUUID();
       const s = {
         op: "create",
         cmd: "text",
@@ -665,10 +656,8 @@ canvas.addEventListener("mouseup", (e) => {
     const ok =
       (ps.cmd === "rect" && +ps.w > 5 && +ps.h > 5) ||
       (ps.cmd === "circle" && +ps.r > 5);
-    addToLog(ok ? "Creating shape" : "Shape too small, ignoring");
     if (ok) {
-      const id = generateId();
-      addToLog("Generated ID: " + id);
+      const id = crypto.randomUUID();
       const s = {
         op: "create",
         ...ps,
@@ -683,6 +672,8 @@ canvas.addEventListener("mouseup", (e) => {
       shapes[id] = s;
       sendOut(encode(s));
       selectShape(id);
+    } else {
+      addToLog("Shape too small, ignoring");
     }
   }
 
@@ -983,18 +974,12 @@ function applyMsg(ope) {
   } else if (d.op === "clear") {
     shapes = {};
     selectShape(null);
-    idCounter = 0; // Pas sûr que reset le compteur soit une vraie bonne idée, à voir avec la gestion des snapshots, horloges etc (TODO)
   } else if (d.op === "create" && d.cmd) {
     const { cmd, id, ...rest } = d;
     for (const k of ["x", "y", "w", "h", "r", "size"]) {
       if (rest[k] !== undefined) rest[k] = +rest[k];
     }
     shapes[id] = { cmd, id, ...rest };
-
-    // On récupère l'ID en enlevant tous les caractères non numériques
-    const num = parseInt(id.replace(/\D/g, ""));
-    // Si l'ID contient un nombre et que ce nombre est supérieur ou égal au compteur actuel, on met à jour le compteur pour éviter les collisions d'IDs avec les nouvelles formes créées localement.
-    if (!isNaN(num) && num > idCounter) idCounter = num;
   }
   redraw();
 }
