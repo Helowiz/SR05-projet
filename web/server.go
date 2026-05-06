@@ -108,7 +108,6 @@ func do_websocket(w http.ResponseWriter, r *http.Request, eventQueue chan<- Even
 
 		return
 	}
-	// TODO - See how to handle this sequentially
 	eventQueue <- Event{from: WEBSOCKET, content: "init="}
 
 	for {
