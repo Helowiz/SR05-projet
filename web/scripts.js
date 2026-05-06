@@ -792,9 +792,15 @@ function cssToHex(c) {
 // Retourne : TODO
 function propChanged(key, val) {
   if (!selectedId || !shapes[selectedId]) return;
-  // const orig = { ...shapes[selectedId] };
-  shapes[selectedId][key] = val;
-  sendOut(encode({ op: "update", id: selectedId, [key]: val }));
+  if (pendingState) return; // On ignore les changements de propriétés tant qu'on attend la confirmation du serveur pour éviter les conflits d'état.
+  operation = encode({ op: "update", id: selectedId, [key]: val });
+  sendOut(operation);
+  ps = { ...shapes[selectedId], [key]: val };
+  pendingState = {
+    op: operation,
+    previewShape: ps,
+    selected: true,
+  };
   redraw();
 }
 
