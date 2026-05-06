@@ -951,19 +951,20 @@ document.getElementById("connecter").onclick = function (evt) {
 
   ws = new WebSocket("ws://" + host + ":" + port + "/ws");
   ws.onopen = function (evt) {
+    lockedState = { from_other: false, from_self: false };
     addToLog("[INFO] Websocket ouverte");
     document.title = "🌐 " + port;
   };
 
   ws.onclose = function (evt) {
+    shapes = {};
+    pendingState = null;
+    lockedState = { from_other: true, from_self: false };
+    redraw();
     addToLog("[INFO] Websocket fermée");
     ws = null;
     document.title = "🖼️ Collaborative Whiteboard";
   };
-
-  // TODO : cacher le canva si aucune ws ouverte pour éviter les interactions sans connexion,
-  // ou au moins empêcher les modifications du white board local tant que la connexion n'est pas établie,
-  // et afficher un message d'erreur si l'utilisateur essaie d'interagir sans connexion.
 
   ws.onmessage = function (evt) {
     addToLog("[IN] " + evt.data);
@@ -983,7 +984,6 @@ document.getElementById("fermer").onclick = function (evt) {
     return false;
   }
   ws.close();
-  // TODO : gérer la fermeture de la connexion côté client en désactivant les interactions avec le white board et en affichant un message d'information à l'utilisateur.
   return false;
 };
 
@@ -1068,11 +1068,6 @@ async function sendOut(operation) {
 
   addToLog("[OUT] " + operation);
 
-  // TODO : gérer l'envoi d'un message temporaire et éditer le white board uniquement
-  // à partir de la réception de l'accusé de réception du serveur pour éviter les problèmes
-  // de synchronisation dus au délai de transmission. Par exemple, on peut ajouter une propriété
-  // "pending" à la forme en cours de création ou de modification, et ne la rendre définitive qu'à
-  // la réception du message du serveur confirmant l'opération.
   await updateRemote(operation);
 
   return false;
