@@ -248,6 +248,11 @@ function redraw() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   drawGrid();
 
+  if (pendingState && pendingState.previewShape === null) {
+    // Cas particulier du clear
+    ctx.globalAlpha = 0.67;
+  }
+
   // All non-selected and non-pending shapes first
   for (const s of Object.values(shapes)) {
     if (s.id !== selectedId) drawShape(s, false);
@@ -275,6 +280,7 @@ function redraw() {
     drawShape(pendingState.previewShape, pendingState.selected);
     ctx.globalAlpha = 1;
   }
+  ctx.globalAlpha = 1;
 }
 
 // ==================================================
@@ -873,17 +879,22 @@ document.querySelectorAll(".tool-btn[data-tool]").forEach((btn) => {
 // Retourne : TODO
 function deleteSelected() {
   if (!selectedId) return;
-  sendOut(encode({ op: "delete", id: selectedId }));
-  delete shapes[selectedId];
-  selectShape(null);
+  operation = encode({ op: "delete", id: selectedId });
+  sendOut(operation);
+  pendingState = {
+    op: operation,
+    previewShape: shapes[selectedId],
+    selected: true,
+  };
   redraw();
 }
 
 document.getElementById("delete-btn").addEventListener("click", deleteSelected);
 document.getElementById("clear-btn").addEventListener("click", () => {
-  shapes = {};
   selectShape(null);
-  sendOut(encode({ op: "clear" }));
+  operation = encode({ op: "clear" });
+  sendOut(operation);
+  pendingState = { op: operation, previewShape: null, selected: false };
   redraw();
 });
 
@@ -994,6 +1005,7 @@ function applyMsg(ope) {
   if (d.op === "delete") {
     delete shapes[d.id];
     if (selectedId === d.id) selectShape(null);
+    if (pendingState && pendingState.op === ope) pendingState = null;
   } else if (d.op === "update") {
     if (!shapes[d.id]) return;
     const { op, id, ...rest } = d;
@@ -1013,6 +1025,7 @@ function applyMsg(ope) {
   } else if (d.op === "clear") {
     shapes = {};
     selectShape(null);
+    if (pendingState && pendingState.op === ope) pendingState = null;
   } else if (d.op === "create") {
     const { cmd, id, ...rest } = d;
     for (const k of ["x", "y", "w", "h", "r", "size"]) {
