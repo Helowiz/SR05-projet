@@ -87,12 +87,12 @@ func StringToSnapshot(data string) (*Snapshot, error) {
 	return &snap, nil
 }
 
-func globalToString(globalSnapshot *[]Snapshot) string {
-	for _, snap := range *globalSnapshot {
-		data, err := json.Marshal(snap)
-		if err != nil {
-			return ""
-		}
-		return string(data)
-	}
+func Merge(baseSnapshot *Snapshot, receiveSnapshot *Snapshot) *Snapshot {
+	// TODO
+	return baseSnapshot
+}
+
+func MergeMsg(baseSnapshot *Snapshot, msg string) *Snapshot {
+	// TODO
+	return baseSnapshot
 }
