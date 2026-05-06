@@ -248,13 +248,19 @@ function redraw() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   drawGrid();
 
-  // All non-selected shapes first
+  // All non-selected and non-pending shapes first
   for (const s of Object.values(shapes)) {
     if (s.id !== selectedId) drawShape(s, false);
   }
   // Selected shape on top
   if (selectedId && shapes[selectedId]) {
-    drawShape(shapes[selectedId], true);
+    if (dragState) {
+      ctx.globalAlpha = 0.33;
+      drawShape(dragState.editedShape, true);
+      ctx.globalAlpha = 1;
+    } else if (!pendingState || selectedId !== pendingState.previewShape.id) {
+      drawShape(shapes[selectedId], true);
+    }
   }
 
   // Preview while drawing
@@ -469,6 +475,8 @@ function getPos(e) {
 // sinon vérifie si une forme est cliquée pour la sélectionner et entrer en mode "move".
 // Pour l'outil de texte, crée une nouvelle forme de texte à la position du clic et invite l'utilisateur à saisir le contenu du texte.
 canvas.addEventListener("mousedown", (e) => {
+  if (pendingState) return; // On ignore les clics de souris tant qu'on attend la confirmation du serveur pour éviter les conflits d'état.
+
   const { x, y } = getPos(e);
   isMouseDown = true;
   mouseStart = { x, y };
@@ -495,6 +503,7 @@ canvas.addEventListener("mousedown", (e) => {
           startX: x,
           startY: y,
           origShape: { ...sel, ...origExtra },
+          editedShape: { ...sel, ...origExtra },
         };
         return;
       }
@@ -510,6 +519,7 @@ canvas.addEventListener("mousedown", (e) => {
         startX: x,
         startY: y,
         origShape: { ...shapes[hit] },
+        editedShape: { ...shapes[hit] },
       };
     } else {
       // Clic sur le fond du canvas, on désélectionne tout.
@@ -572,6 +582,7 @@ function updateCursorStyle(x, y) {
 // et effectuer les actions appropriées en fonction de l'état actuel de l'interaction
 // (par exemple, déplacer une forme, redimensionner une forme, ou mettre à jour le style du curseur).
 canvas.addEventListener("mousemove", (e) => {
+  if (pendingState) return; // On ignore les mouvements de souris tant qu'on attend la confirmation du serveur pour éviter les conflits d'état.
   const { x, y } = getPos(e);
   lastMousePos = { x, y };
 
@@ -585,8 +596,8 @@ canvas.addEventListener("mousemove", (e) => {
     const dy = y - dragState.startY;
 
     if (dragState.type === "move") {
-      shapes[s.id].x = Math.round(+dragState.origShape.x + dx);
-      shapes[s.id].y = Math.round(+dragState.origShape.y + dy);
+      dragState.editedShape.x = Math.round(+dragState.origShape.x + dx);
+      dragState.editedShape.y = Math.round(+dragState.origShape.y + dy);
     } else if (dragState.type === "handle") {
       const patch = applyHandleMove(
         s.cmd,
@@ -636,24 +647,26 @@ canvas.addEventListener("mousemove", (e) => {
 // (par exemple, terminer le déplacement ou le redimensionnement d'une forme, ou créer une nouvelle forme à partir du dessin en cours).
 // Envoie les mises à jour nécessaires au serveur et réinitialise les états d'interaction.
 canvas.addEventListener("mouseup", (e) => {
+  if (pendingState) return; // On ignore les clics de souris tant qu'on attend la confirmation du serveur pour éviter les conflits d'état.
+
   const { x, y } = getPos(e);
 
   if (dragState) {
-    const s = shapes[dragState.origShape.id];
-    if (s) {
-      const orig = dragState.origShape;
-      const diff = {};
-      // On compare les propriétés pertinentes de la forme modifiée avec celles de la forme originale
-      // pour construire un objet "diff" qui ne contient que les propriétés qui ont changé.
-      // Cela permet d'envoyer au serveur uniquement les données nécessaires pour mettre à jour la forme,
-      // plutôt que d'envoyer l'intégralité de la forme même si seule une partie a été modifiée.
-      for (const k of ["x", "y", "w", "h", "r", "size"]) {
-        if (s[k] !== undefined && String(s[k]) !== String(orig[k]))
-          diff[k] = s[k];
-      }
-      if (Object.keys(diff).length > 0) {
-        sendOut(encode({ op: "update", id: s.id, ...diff }));
-      }
+    const s = dragState.editedShape;
+    const orig = dragState.origShape;
+    const diff = {};
+    // On compare les propriétés pertinentes de la forme modifiée avec celles de la forme originale
+    // pour construire un objet "diff" qui ne contient que les propriétés qui ont changé.
+    // Cela permet d'envoyer au serveur uniquement les données nécessaires pour mettre à jour la forme,
+    // plutôt que d'envoyer l'intégralité de la forme même si seule une partie a été modifiée.
+    for (const k of ["x", "y", "w", "h", "r", "size"]) {
+      if (s[k] !== undefined && String(s[k]) !== String(orig[k]))
+        diff[k] = s[k];
+    }
+    if (Object.keys(diff).length > 0) {
+      operation = encode({ op: "update", id: s.id, ...diff });
+      sendOut(operation);
+      pendingState = { op: operation, previewShape: s, selected: true };
     }
     dragState = null;
     redraw();
@@ -983,6 +996,13 @@ function applyMsg(ope) {
     for (const k of ["x", "y", "w", "h", "r", "size"]) {
       if (rest[k] !== undefined) rest[k] = +rest[k];
     }
+
+    if (pendingState && pendingState.op === ope) {
+      // Si on reçoit une opération de mise à jour alors qu'on est en train d'attendre la confirmation d'une opération de mise à jour précédente (pendingState), on vérifie si l'opération reçue correspond à celle en attente (en comparant les opérations encodées). Si c'est le cas, cela signifie que le serveur a confirmé la modification de la forme que nous avons initiée, et nous pouvons alors effacer l'état d'attente (pendingState) pour permettre de nouvelles interactions.
+      shapes[d.id] = pendingState.previewShape;
+      pendingState = null;
+    }
+
     Object.assign(shapes[d.id], rest);
   } else if (d.op === "clear") {
     shapes = {};
@@ -996,9 +1016,9 @@ function applyMsg(ope) {
 
     if (pendingState && pendingState.op === ope) {
       // Si on reçoit une opération de création alors qu'on est en train d'attendre la confirmation d'une opération de création précédente (pendingState), on vérifie si l'opération reçue correspond à celle en attente (en comparant les opérations encodées). Si c'est le cas, cela signifie que le serveur a confirmé la création de la forme que nous avons initiée, et nous pouvons alors effacer l'état d'attente (pendingState) pour permettre de nouvelles interactions.
-        pendingState = null;
-        selectShape(id);
-      }
+      pendingState = null;
+      selectShape(id);
+    }
   }
   redraw();
 }
