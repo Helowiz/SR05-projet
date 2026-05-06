@@ -280,7 +280,7 @@ function redraw() {
     ctx.globalAlpha = 1;
   }
 
-  if (pendingState) {
+  if (pendingState?.previewShape) {
     ctx.globalAlpha = 0.67;
     drawShape(pendingState.previewShape, pendingState.selected);
     ctx.globalAlpha = 1;
@@ -1009,7 +1009,12 @@ function applyMsg(ope) {
 
   if (pendingState && pendingState.op !== ope) {
     // L'opération reçue ne correspond pas à celle en attente, ce n'est pas censé avoir lieu.
-    addToLog("[WARN] Received operation does not match pending operation");
+    addToLog(
+      "[WARN] Received operation does not match pending operation. Received: " +
+        ope +
+        ", pending: " +
+        pendingState.op,
+    );
   }
 
   if (d.op === "lock" && !lockedState.from_self) {
