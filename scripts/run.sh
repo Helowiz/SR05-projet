@@ -30,4 +30,4 @@ echo "Compilation réussie."
 
 echo "==> Démarrage de l'anneau..."
 
-./anneau_avc_app.sh ./bin/app ./bin/ctl
+./anneau_avc_app.sh ./bin/app ./bin/ctl 
