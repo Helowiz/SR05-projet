@@ -53,6 +53,7 @@ let isMouseDown = false;
 let mouseStart = { x: 0, y: 0 };
 let lastMousePos = { x: 0, y: 0 };
 let drawState = null; // while creating a shape by drag
+let pendingState = null; // lorsqu'on a modifié le whiteboard et qu'on attend la confirmation du serveur
 let dragState = null; // while moving / resizing
 
 // ==================================================
@@ -258,8 +259,14 @@ function redraw() {
 
   // Preview while drawing
   if (drawState?.previewShape) {
-    ctx.globalAlpha = 0.55;
+    ctx.globalAlpha = 0.33;
     drawShape(drawState.previewShape, false);
+    ctx.globalAlpha = 1;
+  }
+
+  if (pendingState) {
+    ctx.globalAlpha = 0.67;
+    drawShape(pendingState.previewShape, pendingState.selected);
     ctx.globalAlpha = 1;
   }
 }
@@ -522,9 +529,9 @@ canvas.addEventListener("mousedown", (e) => {
         size: 20,
         color: currentColor(),
       };
-      shapes[id] = s;
-      sendOut(encode(s));
-      selectShape(id);
+      operation = encode(s);
+      sendOut(operation);
+      pendingState = { op: operation, previewShape: s, selected: false };
       redraw();
     }
   } else {
@@ -669,9 +676,10 @@ canvas.addEventListener("mouseup", (e) => {
           : {}),
         ...(ps.cmd === "circle" ? { r: Math.round(+ps.r) } : {}),
       };
-      shapes[id] = s;
-      sendOut(encode(s));
-      selectShape(id);
+
+      operation = encode(s);
+      sendOut(operation);
+      pendingState = { op: operation, previewShape: ps, selected: false };
     } else {
       addToLog("Shape too small, ignoring");
     }
@@ -959,6 +967,11 @@ function handleReceive(msg) {
 function applyMsg(ope) {
   const d = decode(ope);
 
+  if (pendingState && pendingState.op !== ope) {
+    // L'opération reçue ne correspond pas à celle en attente, ce n'est pas censé avoir lieu.
+    addToLog("[WARN] Received operation does not match pending operation");
+  }
+
   if (d.op === "delete") {
     delete shapes[d.id];
     if (selectedId === d.id) selectShape(null);
@@ -974,12 +987,18 @@ function applyMsg(ope) {
   } else if (d.op === "clear") {
     shapes = {};
     selectShape(null);
-  } else if (d.op === "create" && d.cmd) {
+  } else if (d.op === "create") {
     const { cmd, id, ...rest } = d;
     for (const k of ["x", "y", "w", "h", "r", "size"]) {
       if (rest[k] !== undefined) rest[k] = +rest[k];
     }
     shapes[id] = { cmd, id, ...rest };
+
+    if (pendingState && pendingState.op === ope) {
+      // Si on reçoit une opération de création alors qu'on est en train d'attendre la confirmation d'une opération de création précédente (pendingState), on vérifie si l'opération reçue correspond à celle en attente (en comparant les opérations encodées). Si c'est le cas, cela signifie que le serveur a confirmé la création de la forme que nous avons initiée, et nous pouvons alors effacer l'état d'attente (pendingState) pour permettre de nouvelles interactions.
+        pendingState = null;
+        selectShape(id);
+      }
   }
   redraw();
 }
