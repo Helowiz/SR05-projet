@@ -606,7 +606,7 @@ canvas.addEventListener("mousemove", (e) => {
         dy,
         dragState.origShape,
       );
-      Object.assign(shapes[s.id], patch);
+      dragState.editedShape = { ...dragState.editedShape, ...patch };
     }
     updatePropsPanel();
     redraw();
