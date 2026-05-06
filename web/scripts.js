@@ -55,6 +55,7 @@ let lastMousePos = { x: 0, y: 0 };
 let drawState = null; // while creating a shape by drag
 let pendingState = null; // lorsqu'on a modifié le whiteboard et qu'on attend la confirmation du serveur
 let dragState = null; // while moving / resizing
+let lockedState = { from_other: true, from_self: false }; // permet de vérouiller l'interaction avec le whiteboard lorsqu'un autre client est en train de faire une modification pour éviter les conflits d'état
 
 // ==================================================
 // MISE EN PLACE DU WHITE BOARD
@@ -246,6 +247,10 @@ function getHandlePointsCircle(cx, cy, r) {
 // Retourne : TODO
 function redraw() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
+  if (lockedState.from_other) {
+    ctx.fillStyle = "#ff5555cc";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  }
   drawGrid();
 
   if (pendingState && pendingState.previewShape === null) {
@@ -481,7 +486,9 @@ function getPos(e) {
 // sinon vérifie si une forme est cliquée pour la sélectionner et entrer en mode "move".
 // Pour l'outil de texte, crée une nouvelle forme de texte à la position du clic et invite l'utilisateur à saisir le contenu du texte.
 canvas.addEventListener("mousedown", (e) => {
-  if (pendingState) return; // On ignore les clics de souris tant qu'on attend la confirmation du serveur pour éviter les conflits d'état.
+  if (pendingState || lockedState.from_other) return; // On ignore les clics de souris tant qu'on attend la confirmation du serveur pour éviter les conflits d'état.
+
+  lock_others();
 
   const { x, y } = getPos(e);
   isMouseDown = true;
@@ -588,7 +595,7 @@ function updateCursorStyle(x, y) {
 // et effectuer les actions appropriées en fonction de l'état actuel de l'interaction
 // (par exemple, déplacer une forme, redimensionner une forme, ou mettre à jour le style du curseur).
 canvas.addEventListener("mousemove", (e) => {
-  if (pendingState) return; // On ignore les mouvements de souris tant qu'on attend la confirmation du serveur pour éviter les conflits d'état.
+  if (pendingState || lockedState.from_other) return; // On ignore les mouvements de souris tant qu'on attend la confirmation du serveur pour éviter les conflits d'état.
   const { x, y } = getPos(e);
   lastMousePos = { x, y };
 
@@ -653,7 +660,7 @@ canvas.addEventListener("mousemove", (e) => {
 // (par exemple, terminer le déplacement ou le redimensionnement d'une forme, ou créer une nouvelle forme à partir du dessin en cours).
 // Envoie les mises à jour nécessaires au serveur et réinitialise les états d'interaction.
 canvas.addEventListener("mouseup", (e) => {
-  if (pendingState) return; // On ignore les clics de souris tant qu'on attend la confirmation du serveur pour éviter les conflits d'état.
+  if (pendingState || lockedState.from_other) return; // On ignore les clics de souris tant qu'on attend la confirmation du serveur pour éviter les conflits d'état.
 
   const { x, y } = getPos(e);
 
@@ -798,7 +805,7 @@ function cssToHex(c) {
 // Retourne : TODO
 function propChanged(key, val) {
   if (!selectedId || !shapes[selectedId]) return;
-  if (pendingState) return; // On ignore les changements de propriétés tant qu'on attend la confirmation du serveur pour éviter les conflits d'état.
+  if (pendingState || lockedState.from_other) return; // On ignore les changements de propriétés tant qu'on attend la confirmation du serveur pour éviter les conflits d'état.
   operation = encode({ op: "update", id: selectedId, [key]: val });
   sendOut(operation);
   ps = { ...shapes[selectedId], [key]: val };
@@ -878,6 +885,7 @@ document.querySelectorAll(".tool-btn[data-tool]").forEach((btn) => {
 // Paramètres : aucun
 // Retourne : TODO
 function deleteSelected() {
+  if (pendingState || lockedState.from_other) return;
   if (!selectedId) return;
   operation = encode({ op: "delete", id: selectedId });
   sendOut(operation);
@@ -891,6 +899,7 @@ function deleteSelected() {
 
 document.getElementById("delete-btn").addEventListener("click", deleteSelected);
 document.getElementById("clear-btn").addEventListener("click", () => {
+  if (pendingState || lockedState.from_other) return;
   selectShape(null);
   operation = encode({ op: "clear" });
   sendOut(operation);
@@ -900,6 +909,7 @@ document.getElementById("clear-btn").addEventListener("click", () => {
 
 // Gère les raccourcis clavier pour les outils de dessin, la sélection, la suppression et l'échappement.
 window.addEventListener("keydown", (e) => {
+  if (pendingState || lockedState.from_other) return;
   if (e.target.tagName === "INPUT") return;
   const map = {
     v: "select",
@@ -1002,6 +1012,12 @@ function applyMsg(ope) {
     addToLog("[WARN] Received operation does not match pending operation");
   }
 
+  if (d.op === "lock" && !lockedState.from_self) {
+    lockedState.from_other = true;
+    addToLog("[INFO] Locked by another user");
+  } else if (d.op !== "lock")
+    lockedState = { from_other: false, from_self: false }; // On considère que toute opération reçue du serveur signifie que le verrouillage par un autre utilisateur est levé, sauf si l'opération reçue est elle-même une opération de verrouillage ("lock"), auquel cas on maintient l'état de verrouillage.
+
   if (d.op === "delete") {
     delete shapes[d.id];
     if (selectedId === d.id) selectShape(null);
@@ -1060,6 +1076,11 @@ async function sendOut(operation) {
   await updateRemote(operation);
 
   return false;
+}
+
+function lock_others() {
+  sendOut(encode({ op: "lock" }));
+  lockedState.from_self = true;
 }
 
 const updateRemote = async (newOperation) => {

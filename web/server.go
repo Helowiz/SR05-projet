@@ -132,8 +132,10 @@ func handle_ctl_msgs(active chan bool) {
 				ws_send("info=debut section critique")
 				//active <- true
 				if pendingOpe != "" { //si j'ai la section critique
+					if pendingOpe != "lock" {
 					//modify_data(pendingOpe, active)
 					liberer_sc(pendingOpe) // je la libère
+					}
 					pendingOpe = ""
 				}
 			} else {
@@ -142,7 +144,7 @@ func handle_ctl_msgs(active chan bool) {
 			}
 		case "data": // message sur l'update des données
 			lastOpe = msg_val
-			ws_send("data=" + msg_val) // update les données dans le whiteboard
+			ws_send("data=" + msg_val)          // update les données dans le whiteboard
 			modify_data(msg_val, active)
 
 		case "snapshot":
@@ -165,6 +167,8 @@ func modify_data(newOpe string, active chan bool) {
 	op := protocol.Findval(newOpe, "op", "server")
 	id := protocol.Findval(newOpe, "id", "server")
 	switch op {
+	case "lock":
+		// no operation
 	case "create":
 		parseShape, err := shape.ParseShape(newOpe)
 		if err != nil {
