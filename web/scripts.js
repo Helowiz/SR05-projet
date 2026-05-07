@@ -47,22 +47,15 @@ function decode(str) {
 let shapes = {}; // { id: shapeObject }
 let selectedId = null;
 let tool = "select";
-let idCounter = 0; // A tout moment, correspond au nombre de formes créées depuis le début de la session (y compris celles qui ont été supprimées, sauf si CLEAR? -> TODO), et sert à générer des IDs uniques pour les nouvelles formes.
 
 // Etats d'interaction
 let isMouseDown = false;
 let mouseStart = { x: 0, y: 0 };
 let lastMousePos = { x: 0, y: 0 };
 let drawState = null; // while creating a shape by drag
+let pendingState = null; // lorsqu'on a modifié le whiteboard et qu'on attend la confirmation du serveur
 let dragState = null; // while moving / resizing
-
-// Génère un ID unique pour une nouvelle forme,
-// en utilisant un compteur incrémental.
-// Paramètres : aucun
-// Retourne : une chaîne de caractères représentant l'ID unique de la forme, au format "shape-XXXX" où XXXX est un nombre à 4 chiffres.
-function generateId() {
-  return "shape-" + (++idCounter).toString().padStart(4, "0");
-}
+let lockedState = { from_other: true, from_self: false }; // permet de vérouiller l'interaction avec le whiteboard lorsqu'un autre client est en train de faire une modification pour éviter les conflits d'état
 
 // ==================================================
 // MISE EN PLACE DU WHITE BOARD
@@ -254,23 +247,45 @@ function getHandlePointsCircle(cx, cy, r) {
 // Retourne : TODO
 function redraw() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
+  if (lockedState.from_other) {
+    ctx.fillStyle = "#ff5555cc";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  }
   drawGrid();
 
-  // All non-selected shapes first
+  if (pendingState && pendingState.previewShape === null) {
+    // Cas particulier du clear
+    ctx.globalAlpha = 0.67;
+  }
+
+  // All non-selected and non-pending shapes first
   for (const s of Object.values(shapes)) {
     if (s.id !== selectedId) drawShape(s, false);
   }
   // Selected shape on top
   if (selectedId && shapes[selectedId]) {
-    drawShape(shapes[selectedId], true);
+    if (dragState) {
+      ctx.globalAlpha = 0.33;
+      drawShape(dragState.editedShape, true);
+      ctx.globalAlpha = 1;
+    } else if (!pendingState || selectedId !== pendingState.previewShape.id) {
+      drawShape(shapes[selectedId], true);
+    }
   }
 
   // Preview while drawing
   if (drawState?.previewShape) {
-    ctx.globalAlpha = 0.55;
+    ctx.globalAlpha = 0.33;
     drawShape(drawState.previewShape, false);
     ctx.globalAlpha = 1;
   }
+
+  if (pendingState?.previewShape) {
+    ctx.globalAlpha = 0.67;
+    drawShape(pendingState.previewShape, pendingState.selected);
+    ctx.globalAlpha = 1;
+  }
+  ctx.globalAlpha = 1;
 }
 
 // ==================================================
@@ -471,6 +486,10 @@ function getPos(e) {
 // sinon vérifie si une forme est cliquée pour la sélectionner et entrer en mode "move".
 // Pour l'outil de texte, crée une nouvelle forme de texte à la position du clic et invite l'utilisateur à saisir le contenu du texte.
 canvas.addEventListener("mousedown", (e) => {
+  if (pendingState || lockedState.from_other) return; // On ignore les clics de souris tant qu'on attend la confirmation du serveur pour éviter les conflits d'état.
+
+  lock_others();
+
   const { x, y } = getPos(e);
   isMouseDown = true;
   mouseStart = { x, y };
@@ -497,6 +516,7 @@ canvas.addEventListener("mousedown", (e) => {
           startX: x,
           startY: y,
           origShape: { ...sel, ...origExtra },
+          editedShape: { ...sel, ...origExtra },
         };
         return;
       }
@@ -512,6 +532,7 @@ canvas.addEventListener("mousedown", (e) => {
         startX: x,
         startY: y,
         origShape: { ...shapes[hit] },
+        editedShape: { ...shapes[hit] },
       };
     } else {
       // Clic sur le fond du canvas, on désélectionne tout.
@@ -520,7 +541,7 @@ canvas.addEventListener("mousedown", (e) => {
   } else if (tool === "text") {
     const val = prompt("Enter text:", "Text");
     if (val !== null) {
-      const id = generateId();
+      const id = crypto.randomUUID();
       const s = {
         op: "create",
         cmd: "text",
@@ -531,9 +552,9 @@ canvas.addEventListener("mousedown", (e) => {
         size: 20,
         color: currentColor(),
       };
-      shapes[id] = s;
-      sendOut(encode(s));
-      selectShape(id);
+      operation = encode(s);
+      sendOut(operation);
+      pendingState = { op: operation, previewShape: s, selected: false };
       redraw();
     }
   } else {
@@ -574,6 +595,7 @@ function updateCursorStyle(x, y) {
 // et effectuer les actions appropriées en fonction de l'état actuel de l'interaction
 // (par exemple, déplacer une forme, redimensionner une forme, ou mettre à jour le style du curseur).
 canvas.addEventListener("mousemove", (e) => {
+  if (pendingState || lockedState.from_other) return; // On ignore les mouvements de souris tant qu'on attend la confirmation du serveur pour éviter les conflits d'état.
   const { x, y } = getPos(e);
   lastMousePos = { x, y };
 
@@ -587,8 +609,8 @@ canvas.addEventListener("mousemove", (e) => {
     const dy = y - dragState.startY;
 
     if (dragState.type === "move") {
-      shapes[s.id].x = Math.round(+dragState.origShape.x + dx);
-      shapes[s.id].y = Math.round(+dragState.origShape.y + dy);
+      dragState.editedShape.x = Math.round(+dragState.origShape.x + dx);
+      dragState.editedShape.y = Math.round(+dragState.origShape.y + dy);
     } else if (dragState.type === "handle") {
       const patch = applyHandleMove(
         s.cmd,
@@ -597,7 +619,7 @@ canvas.addEventListener("mousemove", (e) => {
         dy,
         dragState.origShape,
       );
-      Object.assign(shapes[s.id], patch);
+      dragState.editedShape = { ...dragState.editedShape, ...patch };
     }
     updatePropsPanel();
     redraw();
@@ -638,24 +660,26 @@ canvas.addEventListener("mousemove", (e) => {
 // (par exemple, terminer le déplacement ou le redimensionnement d'une forme, ou créer une nouvelle forme à partir du dessin en cours).
 // Envoie les mises à jour nécessaires au serveur et réinitialise les états d'interaction.
 canvas.addEventListener("mouseup", (e) => {
+  if (pendingState || lockedState.from_other) return; // On ignore les clics de souris tant qu'on attend la confirmation du serveur pour éviter les conflits d'état.
+
   const { x, y } = getPos(e);
 
   if (dragState) {
-    const s = shapes[dragState.origShape.id];
-    if (s) {
-      const orig = dragState.origShape;
-      const diff = {};
-      // On compare les propriétés pertinentes de la forme modifiée avec celles de la forme originale
-      // pour construire un objet "diff" qui ne contient que les propriétés qui ont changé.
-      // Cela permet d'envoyer au serveur uniquement les données nécessaires pour mettre à jour la forme,
-      // plutôt que d'envoyer l'intégralité de la forme même si seule une partie a été modifiée.
-      for (const k of ["x", "y", "w", "h", "r", "size"]) {
-        if (s[k] !== undefined && String(s[k]) !== String(orig[k]))
-          diff[k] = s[k];
-      }
-      if (Object.keys(diff).length > 0) {
-        sendOut(encode({ op: "update", id: s.id, ...diff }));
-      }
+    const s = dragState.editedShape;
+    const orig = dragState.origShape;
+    const diff = {};
+    // On compare les propriétés pertinentes de la forme modifiée avec celles de la forme originale
+    // pour construire un objet "diff" qui ne contient que les propriétés qui ont changé.
+    // Cela permet d'envoyer au serveur uniquement les données nécessaires pour mettre à jour la forme,
+    // plutôt que d'envoyer l'intégralité de la forme même si seule une partie a été modifiée.
+    for (const k of ["x", "y", "w", "h", "r", "size"]) {
+      if (s[k] !== undefined && String(s[k]) !== String(orig[k]))
+        diff[k] = s[k];
+    }
+    if (Object.keys(diff).length > 0) {
+      operation = encode({ op: "update", id: s.id, ...diff });
+      sendOut(operation);
+      pendingState = { op: operation, previewShape: s, selected: true };
     }
     dragState = null;
     redraw();
@@ -665,10 +689,8 @@ canvas.addEventListener("mouseup", (e) => {
     const ok =
       (ps.cmd === "rect" && +ps.w > 5 && +ps.h > 5) ||
       (ps.cmd === "circle" && +ps.r > 5);
-    addToLog(ok ? "Creating shape" : "Shape too small, ignoring");
     if (ok) {
-      const id = generateId();
-      addToLog("Generated ID: " + id);
+      const id = crypto.randomUUID();
       const s = {
         op: "create",
         ...ps,
@@ -680,9 +702,12 @@ canvas.addEventListener("mouseup", (e) => {
           : {}),
         ...(ps.cmd === "circle" ? { r: Math.round(+ps.r) } : {}),
       };
-      shapes[id] = s;
-      sendOut(encode(s));
-      selectShape(id);
+
+      operation = encode(s);
+      sendOut(operation);
+      pendingState = { op: operation, previewShape: ps, selected: false };
+    } else {
+      addToLog("Shape too small, ignoring");
     }
   }
 
@@ -780,9 +805,15 @@ function cssToHex(c) {
 // Retourne : TODO
 function propChanged(key, val) {
   if (!selectedId || !shapes[selectedId]) return;
-  // const orig = { ...shapes[selectedId] };
-  shapes[selectedId][key] = val;
-  sendOut(encode({ op: "update", id: selectedId, [key]: val }));
+  if (pendingState || lockedState.from_other) return; // On ignore les changements de propriétés tant qu'on attend la confirmation du serveur pour éviter les conflits d'état.
+  operation = encode({ op: "update", id: selectedId, [key]: val });
+  sendOut(operation);
+  ps = { ...shapes[selectedId], [key]: val };
+  pendingState = {
+    op: operation,
+    previewShape: ps,
+    selected: true,
+  };
   redraw();
 }
 
@@ -854,23 +885,31 @@ document.querySelectorAll(".tool-btn[data-tool]").forEach((btn) => {
 // Paramètres : aucun
 // Retourne : TODO
 function deleteSelected() {
+  if (pendingState || lockedState.from_other) return;
   if (!selectedId) return;
-  sendOut(encode({ op: "delete", id: selectedId }));
-  delete shapes[selectedId];
-  selectShape(null);
+  operation = encode({ op: "delete", id: selectedId });
+  sendOut(operation);
+  pendingState = {
+    op: operation,
+    previewShape: shapes[selectedId],
+    selected: true,
+  };
   redraw();
 }
 
 document.getElementById("delete-btn").addEventListener("click", deleteSelected);
 document.getElementById("clear-btn").addEventListener("click", () => {
-  shapes = {};
+  if (pendingState || lockedState.from_other) return;
   selectShape(null);
-  sendOut(encode({ op: "clear" }));
+  operation = encode({ op: "clear" });
+  sendOut(operation);
+  pendingState = { op: operation, previewShape: null, selected: false };
   redraw();
 });
 
 // Gère les raccourcis clavier pour les outils de dessin, la sélection, la suppression et l'échappement.
 window.addEventListener("keydown", (e) => {
+  if (pendingState || lockedState.from_other) return;
   if (e.target.tagName === "INPUT") return;
   const map = {
     v: "select",
@@ -912,19 +951,20 @@ document.getElementById("connecter").onclick = function (evt) {
 
   ws = new WebSocket("ws://" + host + ":" + port + "/ws");
   ws.onopen = function (evt) {
+    lockedState = { from_other: false, from_self: false };
     addToLog("[INFO] Websocket ouverte");
     document.title = "🌐 " + port;
   };
 
   ws.onclose = function (evt) {
+    shapes = {};
+    pendingState = null;
+    lockedState = { from_other: true, from_self: false };
+    redraw();
     addToLog("[INFO] Websocket fermée");
     ws = null;
     document.title = "🖼️ Collaborative Whiteboard";
   };
-
-  // TODO : cacher le canva si aucune ws ouverte pour éviter les interactions sans connexion,
-  // ou au moins empêcher les modifications du white board local tant que la connexion n'est pas établie,
-  // et afficher un message d'erreur si l'utilisateur essaie d'interagir sans connexion.
 
   ws.onmessage = function (evt) {
     addToLog("[IN] " + evt.data);
@@ -944,7 +984,6 @@ document.getElementById("fermer").onclick = function (evt) {
     return false;
   }
   ws.close();
-  // TODO : gérer la fermeture de la connexion côté client en désactivant les interactions avec le white board et en affichant un message d'information à l'utilisateur.
   return false;
 };
 
@@ -968,9 +1007,26 @@ function handleReceive(msg) {
 function applyMsg(ope) {
   const d = decode(ope);
 
+  if (pendingState && pendingState.op !== ope) {
+    // L'opération reçue ne correspond pas à celle en attente, ce n'est pas censé avoir lieu.
+    addToLog(
+      "[WARN] Received operation does not match pending operation. Received: " +
+        ope +
+        ", pending: " +
+        pendingState.op,
+    );
+  }
+
+  if (d.op === "lock" && !lockedState.from_self) {
+    lockedState.from_other = true;
+    addToLog("[INFO] Locked by another user");
+  } else if (d.op !== "lock")
+    lockedState = { from_other: false, from_self: false }; // On considère que toute opération reçue du serveur signifie que le verrouillage par un autre utilisateur est levé, sauf si l'opération reçue est elle-même une opération de verrouillage ("lock"), auquel cas on maintient l'état de verrouillage.
+
   if (d.op === "delete") {
     delete shapes[d.id];
     if (selectedId === d.id) selectShape(null);
+    if (pendingState && pendingState.op === ope) pendingState = null;
   } else if (d.op === "update") {
     if (!shapes[d.id]) return;
     const { op, id, ...rest } = d;
@@ -979,22 +1035,30 @@ function applyMsg(ope) {
     for (const k of ["x", "y", "w", "h", "r", "size"]) {
       if (rest[k] !== undefined) rest[k] = +rest[k];
     }
+
+    if (pendingState && pendingState.op === ope) {
+      // Si on reçoit une opération de mise à jour alors qu'on est en train d'attendre la confirmation d'une opération de mise à jour précédente (pendingState), on vérifie si l'opération reçue correspond à celle en attente (en comparant les opérations encodées). Si c'est le cas, cela signifie que le serveur a confirmé la modification de la forme que nous avons initiée, et nous pouvons alors effacer l'état d'attente (pendingState) pour permettre de nouvelles interactions.
+      shapes[d.id] = pendingState.previewShape;
+      pendingState = null;
+    }
+
     Object.assign(shapes[d.id], rest);
   } else if (d.op === "clear") {
     shapes = {};
     selectShape(null);
-    idCounter = 0; // Pas sûr que reset le compteur soit une vraie bonne idée, à voir avec la gestion des snapshots, horloges etc (TODO)
-  } else if (d.op === "create" && d.cmd) {
+    if (pendingState && pendingState.op === ope) pendingState = null;
+  } else if (d.op === "create") {
     const { cmd, id, ...rest } = d;
     for (const k of ["x", "y", "w", "h", "r", "size"]) {
       if (rest[k] !== undefined) rest[k] = +rest[k];
     }
     shapes[id] = { cmd, id, ...rest };
 
-    // On récupère l'ID en enlevant tous les caractères non numériques
-    const num = parseInt(id.replace(/\D/g, ""));
-    // Si l'ID contient un nombre et que ce nombre est supérieur ou égal au compteur actuel, on met à jour le compteur pour éviter les collisions d'IDs avec les nouvelles formes créées localement.
-    if (!isNaN(num) && num > idCounter) idCounter = num;
+    if (pendingState && pendingState.op === ope) {
+      // Si on reçoit une opération de création alors qu'on est en train d'attendre la confirmation d'une opération de création précédente (pendingState), on vérifie si l'opération reçue correspond à celle en attente (en comparant les opérations encodées). Si c'est le cas, cela signifie que le serveur a confirmé la création de la forme que nous avons initiée, et nous pouvons alors effacer l'état d'attente (pendingState) pour permettre de nouvelles interactions.
+      pendingState = null;
+      selectShape(id);
+    }
   }
   redraw();
 }
@@ -1009,14 +1073,14 @@ async function sendOut(operation) {
 
   addToLog("[OUT] " + operation);
 
-  // TODO : gérer l'envoi d'un message temporaire et éditer le white board uniquement
-  // à partir de la réception de l'accusé de réception du serveur pour éviter les problèmes
-  // de synchronisation dus au délai de transmission. Par exemple, on peut ajouter une propriété
-  // "pending" à la forme en cours de création ou de modification, et ne la rendre définitive qu'à
-  // la réception du message du serveur confirmant l'opération.
   await updateRemote(operation);
 
   return false;
+}
+
+function lock_others() {
+  sendOut(encode({ op: "lock" }));
+  lockedState.from_self = true;
 }
 
 const updateRemote = async (newOperation) => {
