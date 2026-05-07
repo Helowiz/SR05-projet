@@ -152,7 +152,7 @@ func parse_ctl_message(msg string) {
 			receiveSnapshot, _ := snapshot.StringToSnapshot(receiveGlobalState)
 			globalState = snapshot.Merge(globalState, receiveSnapshot)
 			nbStateExpected--
-			nbMsgExpected = nbMsgExpected + total
+			nbMsgExpected = nbMsgExpected + total // TODO prendre le total reçu
 			if nbStateExpected == 0 && nbMsgExpected == 0 {
 				resetSnapshot()
 			}
@@ -214,7 +214,7 @@ func parse_app_msg(msg string) {
 		receiveSnapshot := protocol.Findval(msg, "snap", proc_name)
 		globalState, _ = snapshot.StringToSnapshot(receiveSnapshot)
 
-		msgToSend := protocol.Msg_format("type", "state") + protocol.Msg_format("global_state", receiveSnapshot) + protocol.Msg_format("total", strconv.Itoa(total))
+		msgToSend := protocol.Msg_format("type", "state") + protocol.Msg_format("global_state", receiveSnapshot) + protocol.Msg_format("total", strconv.Itoa(total)) // TODO regarder si je l'ai bien utilisé
 		envoyer_tous(msgToSend)
 
 		stopSnapshot = false

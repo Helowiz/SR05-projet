@@ -90,9 +90,9 @@ func StringToSnapshot(data string) (*Snapshot, error) {
 func Merge(baseSnapshot *Snapshot, receiveSnapshot *Snapshot) *Snapshot {
 	// TODO
 	return baseSnapshot
-}
+} //TODO
 
 func MergeMsg(baseSnapshot *Snapshot, msg string) *Snapshot {
 	// TODO
 	return baseSnapshot
-}
+} // TODO
