@@ -43,11 +43,15 @@ var sauvMsg []string
 var color = WHITE
 var initiator = false
 var total = 0
-var globalState *snapshot.Snapshot
+var localStat *snapshot.Snapshot
+var globalState *snapshot.GlobalSnapshot
 
 // seulement utile pour initiateur
 var nbStateExpected int
 var nbMsgExpected int
+
+var totalEnvoyer = 0
+var totalRecu = 0
 
 /* Fonction utilitaire juste pour print la map file*/
 func map_file_to_string() string {
@@ -106,19 +110,23 @@ func estampille_from_msg(msg string) (Estampille, error) {
 
 /* Traite un message recu d'une autre application de controle */
 func parse_ctl_message(msg string) {
-	// display.Info(proc_name, "parse_ctl_msg", "Parsing : "+msg)
 	est, err := estampille_from_msg(msg)
 	msg_content := protocol.Findval(msg, "msg", "")
 	receiveColor := protocol.Findval(msg, "color", color)
 
+	// si le msg est bien un msg de l'app (et pas de la snapshot)
+	isAppMsg := msg_content == "requete" || msg_content == "accuse" || msg_content == "liberation"
+
 	if receiveColor == RED && color == WHITE { // signal pour prendre une snapshot
+		display.Info(proc_name, "ROUGE", proc_name+" devient Rouge et prend une snapshot")
 		color = RED
 		stopSnapshot = true
-		send_to_app("snapshot", "")
+		sendToApp("snapshot_app", "")
 	}
 
-	if receiveColor == WHITE && color == RED { // msg prepost
-		msgToSend := protocol.Msg_format("type", "prepost") + protocol.Msg_format("value", msg)
+	if isAppMsg && receiveColor == WHITE && color == RED { // msg prepost
+		display.Info(proc_name, "PREPOST", "")
+		msgToSend := "prepost" + protocol.Msg_format("value", protocol.Findval(msg, "msg", proc_name))
 		envoyer_tous(msgToSend)
 	}
 
@@ -134,60 +142,61 @@ func parse_ctl_message(msg string) {
 	switch msg_content {
 
 	case "requete":
+		total--
 		rec_dem_sc(est)
 
 	case "accuse":
+		total--
 		rec_accuse_sc(est)
 
 	case "liberation":
 		// on update les donnes avec le champ data recu
 		//(un message de liberation devrai toujours avoir un champ data)
+		total--
 		newData := protocol.Findval(msg, "data", proc_name)
 		rec_fin_sc(est)
-		send_to_app("data", newData)
+		sendToApp("data", newData)
 
 	case "state": //global_state=blabla bilan=0
 		receiveGlobalState := protocol.Findval(msg, "global_state", proc_name)
 		if initiator {
-			receiveSnapshot, _ := snapshot.StringToSnapshot(receiveGlobalState)
+			receiveTotal, _ := strconv.Atoi(protocol.Findval(msg, "total", proc_name))
+			receiveSnapshot, _ := snapshot.ToSnapshot(receiveGlobalState)
+
 			globalState = snapshot.Merge(globalState, receiveSnapshot)
 			nbStateExpected--
-			nbMsgExpected = nbMsgExpected + total // TODO prendre le total reçu
+			nbMsgExpected = nbMsgExpected + receiveTotal
 			if nbStateExpected == 0 && nbMsgExpected == 0 {
-				resetSnapshot()
+				endSnapshot()
 			}
-		} else {
-			msgToSend := protocol.Msg_format("type", "state") + protocol.Msg_format("global_state", receiveGlobalState) + protocol.Msg_format("total", strconv.Itoa(total))
-			envoyer_tous(msgToSend)
 		}
 	case "prepost":
-		receiveGlobalState := protocol.Findval(msg, "global_state", proc_name)
 		if initiator {
 			nbMsgExpected--
 			globalState = snapshot.MergeMsg(globalState, msg)
 			if nbStateExpected == 0 && nbMsgExpected == 0 {
-				resetSnapshot()
+				endSnapshot()
 			}
-		} else {
-			msgToSend := protocol.Msg_format("type", "state") + protocol.Msg_format("global_state", receiveGlobalState) + protocol.Msg_format("total", strconv.Itoa(total))
-			envoyer_tous(msgToSend)
 		}
 	default:
-		//display.Info(proc_name, "parse_message", "Message ignore"+msg_content)
 		return
 	}
+}
+
+func endSnapshot() {
+	snapshot.SaveSnapshot(localStat)
+	resetSnapshot()
 }
 
 func resetSnapshot() {
 	initiator = false
 	color = WHITE
 	total = 0
-	globalState = nil
+	localStat = nil
 }
 
 /* Traite un message recu de l'application de base */
 func parse_app_msg(msg string) {
-	//display.Info(proc_name, "parse_app_msg", "Parsing : "+msg)
 	type_msg := protocol.Findval(msg, "type", proc_name) // s'il retourne vide on ignore le message de toute facon
 
 	switch type_msg {
@@ -203,18 +212,13 @@ func parse_app_msg(msg string) {
 	case "snapshot_init":
 		color = RED
 		initiator = true
-
-		// Snapshot reçu
-		globalState, _ = snapshot.StringToSnapshot(protocol.Findval(msg, "snap", proc_name))
-
+		localStat, _ = snapshot.ToSnapshot(protocol.Findval(msg, "snap", proc_name))
 		nbStateExpected = n_sites - 1
 		nbMsgExpected = total
-	case "snapshot":
-		// Snapshot reçu
+	case "snapshot": // Snapshot reçu de l'APP
 		receiveSnapshot := protocol.Findval(msg, "snap", proc_name)
-		globalState, _ = snapshot.StringToSnapshot(receiveSnapshot)
-
-		msgToSend := protocol.Msg_format("type", "state") + protocol.Msg_format("global_state", receiveSnapshot) + protocol.Msg_format("total", strconv.Itoa(total)) // TODO regarder si je l'ai bien utilisé
+		localStat, _ = snapshot.ToSnapshot(receiveSnapshot)
+		msgToSend := "state" + protocol.Msg_format("global_state", receiveSnapshot) + protocol.Msg_format("total", strconv.Itoa(total))
 		envoyer_tous(msgToSend)
 
 		stopSnapshot = false
@@ -223,7 +227,6 @@ func parse_app_msg(msg string) {
 		}
 		sauvMsg = nil
 	default:
-		//display.Info(proc_name, "parse_app_message", "Message ignore : "+msg)
 		return
 	}
 }
@@ -231,47 +234,38 @@ func parse_app_msg(msg string) {
 func envoyer(msg string, id int) {
 	est := Estampille{this_id, h}
 
-	fmt.Println(protocol.Msg_format("target", strconv.Itoa(id)) + protocol.Msg_format("id", strconv.Itoa(est.id_site)) + protocol.Msg_format("hlg", strconv.Itoa(est.val_h)) + protocol.Msg_format("msg", msg) + protocol.Msg_format("color", color))
-	total++                          // pour la snapshot
+	sendToCtl(protocol.Msg_format("target", strconv.Itoa(id)) + protocol.Msg_format("id", strconv.Itoa(est.id_site)) + protocol.Msg_format("hlg", strconv.Itoa(est.val_h)) + protocol.Msg_format("msg", msg) + protocol.Msg_format("color", color))
 	messages_recus[est] = struct{}{} // on ne veux pas traiter nos propres messages donc c'est comme si on l'avait deja recu
 }
 func envoyer_tous(msg string) {
 	est := Estampille{this_id, h}
 
 	// id=id_site hlg=val_h msg=msg
-	fmt.Println(protocol.Msg_format("id", strconv.Itoa(est.id_site)) + protocol.Msg_format("hlg", strconv.Itoa(est.val_h)) + protocol.Msg_format("msg", msg) + protocol.Msg_format("color", color))
-	total++ // pour la snapshot
-	// on ne veux pas traiter nos propres messages donc c'est comme si on l'avait deja recu
-	messages_recus[est] = struct{}{}
+	sendToCtl(protocol.Msg_format("id", strconv.Itoa(est.id_site)) + protocol.Msg_format("hlg", strconv.Itoa(est.val_h)) + protocol.Msg_format("msg", msg) + protocol.Msg_format("color", color))
+	messages_recus[est] = struct{}{} // on ne veux pas traiter nos propres messages donc c'est comme si on l'avait deja recu
 }
 
 /* Envoi aux autres le signal de liberation avec les donnes a jour*/
 func envoyer_liberation(newData string) {
 	est := Estampille{this_id, h}
-	fmt.Println(protocol.Msg_format("id", strconv.Itoa(est.id_site)) + protocol.Msg_format("hlg", strconv.Itoa(est.val_h)) + protocol.Msg_format("msg", "liberation") + protocol.Msg_format("data", newData))
-	total++ // pour la snapshot
-	// on ne veux pas traiter nos propres messages donc c'est comme si on l'avait deja recu
-	messages_recus[est] = struct{}{}
-
+	sendToCtl(protocol.Msg_format("id", strconv.Itoa(est.id_site)) + protocol.Msg_format("hlg", strconv.Itoa(est.val_h)) + protocol.Msg_format("msg", "liberation") + protocol.Msg_format("data", newData))
+	messages_recus[est] = struct{}{} // on ne veux pas traiter nos propres messages donc c'est comme si on l'avait deja recu
 }
 
 /* Envoi un message a l'app (just stdout car l'app y est connectee) */
-func send_to_app(msg_type string, value string) {
+func sendToApp(msg_type string, value string) {
 	fmt.Println(protocol.Msg_format("type", msg_type) + protocol.Msg_format("value", value))
-	total++ // pour la snapshot
 }
 
 /* Route le message sans modifs aux successeurs*/
 func forward(msg string) {
-	fmt.Println(msg)
-	total++ // pour la snapshot
+	sendToCtl(msg)
 }
 
 /* Previens l'application de base qu'on est en section critique*/
 func debut_sc_app() {
 	if !app_en_sc {
-		//display.Info(proc_name, "debut_sc", "Entree SC")
-		send_to_app("section_critique", "true")
+		sendToApp("section_critique", "true")
 		app_en_sc = true
 	}
 }
@@ -279,14 +273,8 @@ func debut_sc_app() {
 /* Previens l'application de base qu'on est en fin de section critique*/
 func fin_sc_app(newData string) {
 	if app_en_sc {
-		//display.Info(proc_name, "fin_sc", "Fin SC")
-
-		// envoi le message a l'app que c'est la fin de la sc
-		send_to_app("section_critique", "false")
-
-		// envoi les donnes modifies a l'app pour qu'elle confirme son changement
-		send_to_app("data", newData)
-
+		sendToApp("section_critique", "false") // envoi le message a l'app que c'est la fin de la sc
+		sendToApp("data", newData)             // envoi les donnes modifies a l'app pour qu'elle confirme son changement
 		app_en_sc = false
 	}
 }
@@ -295,6 +283,7 @@ func fin_sc_app(newData string) {
 func app_dem_sc() {
 	h++
 	map_file[this_id] = EltMapFile{"requete", h}
+	total += (n_sites - 1) // on envoie des messages à tous le monde sauf soi
 	envoyer_tous("requete")
 }
 
@@ -302,6 +291,7 @@ func app_dem_sc() {
 func app_fin_sc(newData string) {
 	h++
 	map_file[this_id] = EltMapFile{"liberation", h}
+	total += (n_sites - 1) // on envoie des messages à tous le monde sauf soi
 	envoyer_liberation(newData)
 	fin_sc_app(newData)
 }
@@ -312,7 +302,7 @@ func rec_dem_sc(est Estampille) {
 	h = protocol.Recaler(h, est.val_h)
 
 	map_file[est.id_site] = EltMapFile{"requete", est.val_h}
-
+	total++
 	envoyer("accuse", est.id_site)
 
 	// verifier si l'arrivee de ce message nous permet de passer en SC
@@ -325,15 +315,11 @@ func rec_dem_sc(est Estampille) {
 
 /* Reception d'une fin de section critique d'un autre site */
 func rec_fin_sc(est Estampille) {
-	//display.Info(proc_name, "rec_fin_sc", "")
-
 	h = protocol.Recaler(h, est.val_h)
 	map_file[est.id_site] = EltMapFile{"liberation", est.val_h}
 
 	// verifier si l'arrivee de ce message nous permet de passer en SC
 	// j'ai envoye une requete et j'ai la plus petite estampille
-	//display.Info(proc_name, "rec_fin_sc", strconv.FormatBool(smallest_estampille())+map_file[this_id].msg_type)
-
 	if (map_file[this_id].msg_type == "requete") && smallest_estampille() {
 		debut_sc_app()
 	}
@@ -341,10 +327,9 @@ func rec_fin_sc(est Estampille) {
 
 /* Reception d'un accuse de reception d'un autre site */
 func rec_accuse_sc(est Estampille) {
-	//display.Info(proc_name, "rec_accuse_sc", "Reception accuse")
 	h = protocol.Recaler(h, est.val_h)
-	// si le site n'exist pas encore dans la map on l'ajoute
-	if _, ok := map_file[est.id_site]; !ok {
+
+	if _, ok := map_file[est.id_site]; !ok { // si le site n'exist pas encore dans la map on l'ajoute
 		map_file[est.id_site] = EltMapFile{"accuse", est.val_h}
 
 	} else {
@@ -353,18 +338,15 @@ func rec_accuse_sc(est Estampille) {
 			map_file[est.id_site] = EltMapFile{"accuse", est.val_h}
 		}
 	}
-	//display.Info(proc_name, "rec_accuse_sc", strconv.FormatBool(smallest_estampille())+map_file[this_id].msg_type)
 
 	// verifier si l'arrivee de ce message nous permet de passer en SC
 	// j'ai envoye une requete et j'ai la plus petite estampille
 	if (map_file[this_id].msg_type == "requete") && smallest_estampille() {
-
 		debut_sc_app()
 	}
 }
 
 func handleMsg(msg string) {
-	display.Info(proc_name, "reception", "Reçu ctl : "+msg)
 	targetId := protocol.Findval(msg, "target", proc_name)
 
 	// extraire l'estampille
@@ -374,25 +356,23 @@ func handleMsg(msg string) {
 		return
 	}
 
-	// si le message a deje ete traite on fait rien
 	if _, ok := messages_recus[est]; ok {
 		return
-	}
+	} // si le message a deje ete traite on fait rien
+	messages_recus[est] = struct{}{} // ajouter aux messages recus pour garder une trace
 
-	// ajouter aux messages recus pour garder une trace
-	messages_recus[est] = struct{}{}
-
-	// si le message est pour nous ou pour tous nous on le traite
-	if targetId == "" || targetId == strconv.Itoa(this_id) {
-		// parse le message de controle
-		parse_ctl_message(msg)
-		// si le message est pour tous on le fait passer
-		if targetId == "" {
+	if targetId == "" || targetId == strconv.Itoa(this_id) { // si le message est pour nous ou pour tous nous on le traite
+		if targetId == "" { // si le message est pour tous on le fait passer
 			forward(msg)
 		}
+		parse_ctl_message(msg)
 	} else { // si le message n'est pas pour nous on le renvoi a nos successeurs
 		forward(msg)
 	}
+}
+
+func sendToCtl(msg string) {
+	fmt.Println(msg)
 }
 
 func main() {
@@ -405,15 +385,12 @@ func main() {
 	// init de l'identite du site
 	proc_name = *p_nom
 	this_id = os.Getpid() // assigner notre pid a la variable global
+	n_sites = *p_nbsites  // nombre de sites
 
-	// on note le nombre de sites
-	n_sites = *p_nbsites
-
-	display.Info(proc_name, "", "Démarrage du contrôleur...")
+	display.Info(proc_name, "", "Démarrage du contrôleur")
 
 	var rcvmsg string // message recu
 
-	// boucle infini qui scan stdin pour des messages
 	for {
 		_, err := fmt.Scanln(&rcvmsg)
 		if err != nil {
@@ -421,16 +398,8 @@ func main() {
 			//return
 		}
 
-		//display.Info(*p_nom, "reception", "Reçu brut : "+rcvmsg)
-		total-- // pour la snapshot
-
-		// reception d'un autre site
-		if is_ctl_message(rcvmsg) {
-			if stopSnapshot {
-				sauvMsg = append(sauvMsg, rcvmsg)
-			} else {
-				handleMsg(rcvmsg)
-			}
+		if is_ctl_message(rcvmsg) { // reception d'un autre site
+			handleMsg(rcvmsg)
 		} else { // reception de l'application de base
 			h++
 			parse_app_msg(rcvmsg)

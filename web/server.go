@@ -37,7 +37,7 @@ type Event struct {
 }
 
 func doLocalSnapshot() {
-	snap, err := snapshot.SnapshotToString(snapshot.Shot(whiteboard, *id)) // prend la snapshot et la mets en String pour l'envoyer
+	snap, err := snapshot.ToString(snapshot.Shot(whiteboard, *id)) // prend la snapshot et la mets en String pour l'envoyer
 	if err != nil {
 		display.Error("snapshot", "doLocalSnapshot", err.Error())
 		return
@@ -50,7 +50,7 @@ func doLocalSnapshot() {
 		msgType = "snapshot_init"
 	}
 	msg := protocol.Msg_format("type", msgType) + protocol.Msg_format("snap", snap)
-	display.Info("SNAP", "snapshot", msg)
+	//display.Info("SNAP", "snapshot", msg)
 	fmt.Println(msg)
 }
 
@@ -162,7 +162,7 @@ func handle_ctl_msg(msg string, active chan bool) {
 		ws_send("data=" + msg_val) // update les données dans le whiteboard
 		modify_data(msg_val, active)
 
-	case "snapshot":
+	case "snapshot_app":
 		doLocalSnapshot()
 	}
 }
