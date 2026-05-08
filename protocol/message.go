@@ -89,3 +89,15 @@ func Findval(msg string, key string, name string) string {
 	}
 	return ""
 }
+
+// Fonction utilitaire permettant de convertir une chaîne de caractères au format
+// "=clé=valeur" en une paire clé-valeur
+func ParseEntry(entry string, name string) (string, string) {
+	sep := entry[0:1]
+	kv := strings.Split(entry[1:], sep)
+	if len(kv) != 2 {
+		display.Warning(name, "ParseEntry", "Entrée invalide : "+entry)
+		return "", ""
+	}
+	return kv[0], kv[1]
+}

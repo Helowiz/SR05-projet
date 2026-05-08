@@ -1,4 +1,8 @@
-<html>
+<html lang="fr">
+  <head>
+    <title>🖼️ Collaborative Whiteboard</title>
+    <link rel="stylesheet" href="style.css" type="text/css" />
+  </head>
   <body>
     <b>WebSocket</b>
     <form>
@@ -9,7 +13,8 @@
         : <input id="port" type="text" maxlength="5" size="5" value="4444" />
       </p>
     </form>
-    <b> Application </b>
+    <button id="snapshot">Snapshot</button>
+    <!-- <b> Application </b>
     <h3>data : <span id = "data"></span><h3>
     <div>
       <p>
@@ -17,106 +22,95 @@
         <button id="fin_sc">fin section critique</button>
         <button id="update">incrementer</button>
       </p>
+    </div> -->
+
+    <div id="toolbar">
+      <button class="tool-btn active" data-tool="select">▶ SELECT</button>
+      <button class="tool-btn" data-tool="rect">▭ RECT</button>
+      <button class="tool-btn" data-tool="circle">○ CIRCLE</button>
+      <button class="tool-btn" data-tool="text">T TEXT</button>
+      <div class="sep"></div>
+      <button class="tool-btn" id="delete-btn">✕ DELETE</button>
+      <button class="tool-btn" id="clear-btn">⊘ CLEAR ALL</button>
+      <div class="sep"></div>
+      <span id="hint">V · R · C · T · DEL</span>
     </div>
+
+    <div id="main">
+      <div id="canvas-wrap">
+        <canvas id="canvas"></canvas>
+      </div>
+
+      <div id="props">
+        <h3>Properties</h3>
+        <div id="no-selection">No shape selected</div>
+        <div
+          id="shape-props"
+          style="display: none; display: flex; flex-direction: column; gap: 8px"
+        >
+          <div class="prop-row">
+            <label>ID</label>
+            <input id="prop-id" type="text" readonly />
+          </div>
+          <div class="prop-row">
+            <label>X</label>
+            <input id="prop-x" type="number" />
+          </div>
+          <div class="prop-row">
+            <label>Y</label>
+            <input id="prop-y" type="number" />
+          </div>
+          <div id="wh-props">
+            <div class="prop-row" style="margin-bottom: 8px">
+              <label>Width</label>
+              <input id="prop-w" type="number" />
+            </div>
+            <div class="prop-row">
+              <label>Height</label>
+              <input id="prop-h" type="number" />
+            </div>
+          </div>
+          <div id="r-prop" style="display: none">
+            <div class="prop-row">
+              <label>Radius</label>
+              <input id="prop-r" type="number" />
+            </div>
+          </div>
+          <!-- <div
+            id="text-prop"
+            style="
+              display: none;
+              display: flex;
+              flex-direction: column;
+              gap: 8px;
+            "
+          > -->
+          <div id="text-prop" style="display: none">
+            <div class="prop-row">
+              <label>Text</label>
+              <input id="prop-value" type="text" />
+            </div>
+            <div class="prop-row">
+              <label>Font Size</label>
+              <input id="prop-size" type="number" />
+            </div>
+          </div>
+
+          <div class="prop-row">
+            <label>Fill Color</label>
+            <input id="prop-color" type="color" value="#4488ff" />
+          </div>
+        </div>
+      </div>
+    </div>
+
     <hr />
-    <b> Logs </b>
-    <div id="logs" style="max-height: 40vh; overflow-y: scroll"></div>
 
-    <script>
-      var ws;
-      var data = 0
-      function updateData(newData) {
-        data = newData
+    <div id="logs">
+      <b id="log-header"> Logs </b>
+      <div id="log-messages" style="max-height: 40vh; overflow-y: scroll"></div>
+    </div>
 
-        document.getElementById("data").innerText = newData
-      }
-
-      function handleReceive(msg) {
-        var [prefix, newData] = msg.split("=")
-        switch (prefix) {
-          case "data" : {
-            updateData(parseInt(newData))
-          }
-        }
-      } 
-
-      function addToLog(message) {
-        var logs = document.getElementById("logs");
-        var d = document.createElement("div");
-        d.textContent = message;
-        logs.appendChild(d);
-        logs.scroll(0, logs.scrollHeight);
-      }
-
-      document.getElementById("connecter").onclick = function (evt) {
-        if (ws) {
-          return false;
-        }
-
-        var host = document.getElementById("host").value;
-        var port = document.getElementById("port").value;
-
-        addToLog("Tentative de connexion");
-        addToLog("host = " + host + ", port = " + port);
-
-        ws = new WebSocket("ws://" + host + ":" + port + "/ws");
-        ws.onopen = function (evt) {
-          addToLog("Websocket ouverte");
-        };
-
-        ws.onclose = function (evt) {
-          addToLog("Websocket fermée");
-          ws = null;
-        };
-
-        ws.onmessage = function (evt) {
-          addToLog("Réception: " + evt.data);
-          handleReceive(evt.data)
-        };
-
-        ws.onerror = function (evt) {
-          addToLog("Erreur: " + evt.data);
-        };
-        return false;
-      };
-
-      document.getElementById("fermer").onclick = function (evt) {
-        if (!ws) {
-          return false;
-        }
-        ws.close();
-        return false;
-      };
-
-      document.getElementById("debut_sc").onclick = function (evt) {
-        if (!ws) {
-          return false;
-        }
-        ws.send("section_critique");
-        return false;
-      };
-      document.getElementById("fin_sc").onclick = function (evt) {
-        if (!ws) {
-          return false;
-        }
-        ws.send("f_section_critique");
-        return false;
-      };
-
-      document.getElementById("update").onclick = async function (evt) {
-        if (!ws) {
-          return false;
-        }
-        let tmpData = data + 1
-        await updateRemote(tmpData)
-
-        return false;
-      };
-
-      const updateRemote = async (newData) => {
-        ws.send("data="+newData)
-      }
-
-    </script>
+    <script src="scripts.js"></script>
   </body>
 </html>
