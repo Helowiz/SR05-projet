@@ -10,6 +10,8 @@ var (
 	Orange = "\033[1;33m"
 	Green  = "\033[1;32m"
 	Reset  = "\033[0;00m"
+	Purple = "\033[1;35m"
+	Cyan   = "\033[1;36m"
 )
 
 var pid = os.Getpid()
@@ -29,4 +31,12 @@ func Warning(name string, where string, what string) {
 
 func Error(name string, where string, what string) {
 	baseDisplay(Red, "ERROR", name, where, what)
+}
+
+func Envoie(name string, where string, what string) {
+	baseDisplay(Purple, "ENVOIE", name, where, what)
+}
+
+func Recu(name string, where string, what string) {
+	baseDisplay(Cyan, "RECU", name, where, what)
 }

@@ -12,6 +12,11 @@ func Msg_format(key string, val string) string {
 	return fieldsep + keyvalsep + key + keyvalsep + val
 }
 
+// TODO maybe overwrite
+func Msg_format_key(key string, keysep string, val string, fieldseparator string) string {
+	return fieldseparator + keysep + key + keysep + val
+}
+
 func Recaler(x, y int) int {
 	if x < y {
 		return y + 1
@@ -36,7 +41,6 @@ func Findval(msg string, key string, name string) string {
 			return ""
 		}
 	}
-	//display.Warning(name, "FindVal", "tab_allkeyvals vide : "+msg)
 	return ""
 }
 
