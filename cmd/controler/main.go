@@ -32,6 +32,7 @@ var messages_recus = make(map[Estampille]struct{}) // map juste pour verifier l'
 var app_en_sc bool = false                         // indique si l'app est en section critique
 
 var map_file = make(map[int]EltMapFile) // map pour la file d'attente
+var horloge_vect = make(map[int]int)    // map pour l'horloge vectorielles
 
 // Snapshot
 const WHITE string = "blanc"
@@ -66,10 +67,7 @@ func map_file_to_string() string {
 
 /* Check si j'ai la plus petite estampille et que j'ai bien tout les sites dans la map*/
 func smallest_estampille() bool {
-	//display.Info(proc_name, "smallest_estampille", "Test estampille : \n"+map_file_to_string())
-
 	if len(map_file) != n_sites {
-		//display.Info(proc_name, "smallest_estampille", "Pas encore decouvert tout le réseau")
 		return false
 	}
 
@@ -108,9 +106,31 @@ func estampille_from_msg(msg string) (Estampille, error) {
 
 }
 
+/*mets à jour l'horloge vectorielle à l'aide de celle reçue */
+func vectorial_from_msg(msg string, vect map[int]int) error {
+	rcv_h_vect_string := protocol.Findval(msg, "hlgvect", proc_name)
+	if rcv_h_vect_string == "" {
+		return errors.New("champ hlgvect manquant")
+	}
+
+	rcv_h_vect := protocol.StringToVect(rcv_h_vect_string)
+
+	vect = protocol.RecalerVectoriel(vect, rcv_h_vect)
+
+	//TODO je suis pas sûre qu'on doive réincrémenter ici
+	vect[this_id]++
+
+	return nil
+
+}
+
 /* Traite un message recu d'une autre application de controle */
 func parse_ctl_message(msg string) {
 	est, err := estampille_from_msg(msg)
+
+	//creer la variable de l'horloge vectorielle quand besoin
+	err_vect := vectorial_from_msg(msg, horloge_vect)
+
 	msg_content := protocol.Findval(msg, "msg", "")
 	receiveColor := protocol.Findval(msg, "color", color)
 
@@ -132,6 +152,10 @@ func parse_ctl_message(msg string) {
 
 	if err != nil {
 		display.Error(proc_name, "parse_ctl_msg", "Estampille extraction failed")
+		return
+	}
+	if err_vect != nil {
+		display.Error(proc_name, "parse_ctl_msg", "Horloge vectorielle extraction failed")
 		return
 	}
 	if msg_content == "" {
@@ -233,22 +257,23 @@ func parse_app_msg(msg string) {
 
 func envoyer(msg string, id int) {
 	est := Estampille{this_id, h}
-
-	sendToCtl(protocol.Msg_format("target", strconv.Itoa(id)) + protocol.Msg_format("id", strconv.Itoa(est.id_site)) + protocol.Msg_format("hlg", strconv.Itoa(est.val_h)) + protocol.Msg_format("msg", msg) + protocol.Msg_format("color", color))
+	horloge_vect_str := protocol.VectToString(horloge_vect)
+	sendToCtl(protocol.Msg_format("target", strconv.Itoa(id)) + protocol.Msg_format("id", strconv.Itoa(est.id_site)) + protocol.Msg_format("hlg", strconv.Itoa(est.val_h)) + protocol.Msg_format("hlgvect", horloge_vect_str) + protocol.Msg_format("msg", msg) + protocol.Msg_format("color", color))
 	messages_recus[est] = struct{}{} // on ne veux pas traiter nos propres messages donc c'est comme si on l'avait deja recu
 }
 func envoyer_tous(msg string) {
 	est := Estampille{this_id, h}
-
+	horloge_vect_str := protocol.VectToString(horloge_vect)
 	// id=id_site hlg=val_h msg=msg
-	sendToCtl(protocol.Msg_format("id", strconv.Itoa(est.id_site)) + protocol.Msg_format("hlg", strconv.Itoa(est.val_h)) + protocol.Msg_format("msg", msg) + protocol.Msg_format("color", color))
+	sendToCtl(protocol.Msg_format("id", strconv.Itoa(est.id_site)) + protocol.Msg_format("hlg", strconv.Itoa(est.val_h)) + protocol.Msg_format("hlgvect", horloge_vect_str) + protocol.Msg_format("msg", msg) + protocol.Msg_format("color", color))
 	messages_recus[est] = struct{}{} // on ne veux pas traiter nos propres messages donc c'est comme si on l'avait deja recu
 }
 
 /* Envoi aux autres le signal de liberation avec les donnes a jour*/
 func envoyer_liberation(newData string) {
 	est := Estampille{this_id, h}
-	sendToCtl(protocol.Msg_format("id", strconv.Itoa(est.id_site)) + protocol.Msg_format("hlg", strconv.Itoa(est.val_h)) + protocol.Msg_format("msg", "liberation") + protocol.Msg_format("data", newData))
+	horloge_vect_str := protocol.VectToString(horloge_vect)
+	sendToCtl(protocol.Msg_format("id", strconv.Itoa(est.id_site)) + protocol.Msg_format("hlg", strconv.Itoa(est.val_h)) + protocol.Msg_format("hlgvect", horloge_vect_str) + protocol.Msg_format("msg", "liberation") + protocol.Msg_format("data", newData))
 	messages_recus[est] = struct{}{} // on ne veux pas traiter nos propres messages donc c'est comme si on l'avait deja recu
 }
 
@@ -282,6 +307,7 @@ func fin_sc_app(newData string) {
 /* Traite une demande d'entree en section critique de l'application de base */
 func app_dem_sc() {
 	h++
+	horloge_vect[this_id]++
 	map_file[this_id] = EltMapFile{"requete", h}
 	total += (n_sites - 1) // on envoie des messages à tous le monde sauf soi
 	envoyer_tous("requete")
@@ -290,6 +316,7 @@ func app_dem_sc() {
 /* Traite une demande de fin de section critique de l'application de base */
 func app_fin_sc(newData string) {
 	h++
+	horloge_vect[this_id]++
 	map_file[this_id] = EltMapFile{"liberation", h}
 	total += (n_sites - 1) // on envoie des messages à tous le monde sauf soi
 	envoyer_liberation(newData)
@@ -387,7 +414,13 @@ func main() {
 	this_id = os.Getpid() // assigner notre pid a la variable global
 	n_sites = *p_nbsites  // nombre de sites
 
-	display.Info(proc_name, "", "Démarrage du contrôleur")
+	// on note le nombre de sites
+	n_sites = *p_nbsites
+
+	//initialisation de l'horloge vectorielle
+	horloge_vect[this_id] = 0
+
+	display.Info(proc_name, "main", "Démarrage du contrôleur...")
 
 	var rcvmsg string // message recu
 
@@ -402,6 +435,7 @@ func main() {
 			handleMsg(rcvmsg)
 		} else { // reception de l'application de base
 			h++
+			horloge_vect[this_id]++
 			parse_app_msg(rcvmsg)
 		}
 	}
