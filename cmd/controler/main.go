@@ -430,6 +430,7 @@ func main() {
 			display.Error(*p_nom, "erreur", "Lecture stdin terminée ou en erreur: "+err.Error())
 			//return
 		}
+		display.Info(*p_nom, "main", "recu : "+rcvmsg)
 
 		if is_ctl_message(rcvmsg) { // reception d'un autre site
 			handleMsg(rcvmsg)
