@@ -114,14 +114,11 @@ func vectorial_from_msg(msg string, vect map[int]int) error {
 	}
 
 	rcv_h_vect := protocol.StringToVect(rcv_h_vect_string)
-
 	vect = protocol.RecalerVectoriel(vect, rcv_h_vect)
 
 	//TODO je suis pas sûre qu'on doive réincrémenter ici
 	vect[this_id]++
-
 	return nil
-
 }
 
 /* Traite un message recu d'une autre application de controle */
@@ -138,14 +135,12 @@ func parse_ctl_message(msg string) {
 	isAppMsg := msg_content == "requete" || msg_content == "accuse" || msg_content == "liberation"
 
 	if receiveColor == RED && color == WHITE { // signal pour prendre une snapshot
-		display.Info(proc_name, "ROUGE", proc_name+" devient Rouge et prend une snapshot")
 		color = RED
 		stopSnapshot = true
-		sendToApp("snapshot_app", "")
+		sendToApp("snapshot_app", protocol.VectToString(horloge_vect))
 	}
 
 	if isAppMsg && receiveColor == WHITE && color == RED { // msg prepost
-		display.Info(proc_name, "PREPOST", "")
 		msgToSend := "prepost" + protocol.Msg_format("value", protocol.Findval(msg, "msg", proc_name))
 		envoyer_tous(msgToSend)
 	}
@@ -182,8 +177,9 @@ func parse_ctl_message(msg string) {
 		sendToApp("data", newData)
 
 	case "state": //global_state=blabla bilan=0
-		receiveGlobalState := protocol.Findval(msg, "global_state", proc_name)
 		if initiator {
+			receiveGlobalState := protocol.Findval(msg, "global_state", proc_name)
+			display.Info("STATE", "état", "état reçu")
 			receiveTotal, _ := strconv.Atoi(protocol.Findval(msg, "total", proc_name))
 			receiveSnapshot, _ := snapshot.ToSnapshot(receiveGlobalState)
 
@@ -202,21 +198,26 @@ func parse_ctl_message(msg string) {
 				endSnapshot()
 			}
 		}
+	case "reset_snapshot":
+		resetSnapshot()
 	default:
 		return
 	}
 }
 
 func endSnapshot() {
-	snapshot.SaveSnapshot(localStat)
+	snapshot.SaveSnapshot(globalState)
+	envoyer_tous("reset_snapshot")
 	resetSnapshot()
 }
 
 func resetSnapshot() {
+	display.Info("RESET", "", "")
 	initiator = false
 	color = WHITE
-	total = 0
 	localStat = nil
+	globalState = nil
+	sauvMsg = nil
 }
 
 /* Traite un message recu de l'application de base */
@@ -233,12 +234,27 @@ func parse_app_msg(msg string) {
 		color = RED
 		initiator = true
 		localStat, _ = snapshot.ToSnapshot(protocol.Findval(msg, "snap", proc_name))
+
+		localStat.HorlogeVect = make(map[int]int) // copie HV
+		for k, v := range horloge_vect {
+			localStat.HorlogeVect[k] = v
+		}
+		globalState = snapshot.Merge(nil, localStat)
+
 		nbStateExpected = n_sites - 1
 		nbMsgExpected = total
 	case "snapshot": // Snapshot reçu de l'APP
 		receiveSnapshot := protocol.Findval(msg, "snap", proc_name)
 		localStat, _ = snapshot.ToSnapshot(receiveSnapshot)
-		msgToSend := "state" + protocol.Msg_format("global_state", receiveSnapshot) + protocol.Msg_format("total", strconv.Itoa(total))
+
+		localStat.HorlogeVect = make(map[int]int)
+		for k, v := range horloge_vect {
+			localStat.HorlogeVect[k] = v
+		}
+		snapshotStr, _ := snapshot.ToString(localStat)
+
+		display.Info(proc_name, "ROUGE", proc_name+" devient Rouge et prend une snapshot : "+snapshotStr)
+		msgToSend := "state" + protocol.Msg_format("global_state", snapshotStr) + protocol.Msg_format("total", strconv.Itoa(total))
 		envoyer_tous(msgToSend)
 
 		stopSnapshot = false
@@ -440,7 +456,11 @@ func main() {
 		display.Info(*p_nom, "main", "recu : "+rcvmsg)
 
 		if is_ctl_message(rcvmsg) { // reception d'un autre site
-			handleMsg(rcvmsg)
+			if stopSnapshot {
+				sauvMsg = append(sauvMsg, rcvmsg)
+			} else {
+				handleMsg(rcvmsg)
+			}
 		} else { // reception de l'application de base
 			h++
 			horloge_vect[this_id]++
