@@ -54,6 +54,11 @@ func doLocalSnapshot() {
 	fmt.Println(msg)
 }
 
+func reloadSnapshot() {
+	msg := protocol.Msg_format("type", "relaod")
+	fmt.Println(msg)
+}
+
 func demander_sc() {
 	msg := protocol.Msg_format("type", "fromapp_debut_sc")
 	fmt.Println(msg)
@@ -113,6 +118,9 @@ func handle_ws_msg(message string) {
 	case "snapshot":
 		initiate = true
 		doLocalSnapshot()
+
+	case "reload":
+		reloadSnapshot()
 	}
 }
 
@@ -177,9 +185,11 @@ func handle_ctl_msg(msg string, active chan bool) {
 		if msg_val != "" {
 			modify_data(msg_val, active) // update les données dans le whiteboard
 		}
-
 	case "snapshot_app":
 		doLocalSnapshot()
+	case "reload":
+		// extraire la global_state
+		// envoyer à l'interface sous forme de suite d'opération
 	}
 }
 
@@ -207,7 +217,7 @@ func wait_for_sc(active <-chan bool) bool {
 
 func modify_data(newOpe string, active chan bool) {
 	op := protocol.Findval(newOpe, "op", "server")
-	id := protocol.Findval(newOpe, "id", "server")
+	idSite := protocol.Findval(newOpe, "id", "server")
 	switch op {
 	case "lock":
 		// no operation
@@ -216,14 +226,14 @@ func modify_data(newOpe string, active chan bool) {
 		if err != nil {
 			return
 		}
-		whiteboard.AddShape(id, parseShape)
+		whiteboard.AddShape(idSite, parseShape)
 	case "update":
 		updates := shape.GetUpdateFields(newOpe)
 		for key, value := range updates {
-			whiteboard.UpdateShape(id, key, value)
+			whiteboard.UpdateShape(idSite, key, value)
 		}
 	case "delete":
-		whiteboard.RemoveShape(id)
+		whiteboard.RemoveShape(idSite)
 	case "clear":
 		whiteboard.Clear()
 	default:
