@@ -228,10 +228,6 @@ func parse_app_msg(msg string) {
 		app_dem_sc()
 	case "fromapp_fin_sc":
 		newData := protocol.Findval(msg, "data", proc_name)
-		if newData == "" {
-			display.Error(proc_name, "parse_app_message", "Nouvelles donnees non trouvees")
-			return
-		}
 		app_fin_sc(newData)
 	case "snapshot_init":
 		color = RED
@@ -299,8 +295,17 @@ func debut_sc_app() {
 func fin_sc_app(newData string) {
 	if app_en_sc {
 		sendToApp("section_critique", "false") // envoi le message a l'app que c'est la fin de la sc
-		sendToApp("data", newData)             // envoi les donnes modifies a l'app pour qu'elle confirme son changement
+		if newData != "" {
+			sendToApp("data", newData) // envoi les donnes modifies a l'app pour qu'elle confirme son changement
+		}
 		app_en_sc = false
+	}
+}
+
+/* Préviens l'application de base qu'un autre site veut entrer en section critique*/
+func other_in_sc_app() {
+	if !app_en_sc {
+		sendToApp("section_critique", "other")
 	}
 }
 
@@ -336,6 +341,8 @@ func rec_dem_sc(est Estampille) {
 	// j'ai envoye une requete et j'ai la plus petite estampille
 	if (map_file[this_id].msg_type == "requete") && smallest_estampille() {
 		debut_sc_app()
+	} else {
+		other_in_sc_app()
 	}
 
 }

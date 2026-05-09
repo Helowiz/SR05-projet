@@ -78,7 +78,7 @@ func Findval(msg string, key string, name string) string {
 		equ := keyval[0:1]
 
 		tabkeyval := strings.Split(keyval[1:], equ)
-		if tabkeyval[0] == key {
+		if tabkeyval[0] == key && len(tabkeyval) == 2 {
 			return tabkeyval[1]
 		}
 

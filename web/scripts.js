@@ -1,5 +1,6 @@
 var ws;
 
+const MSG_ENTRY_SEP = "/";
 const MSG_KEY_VALUE_SEP = "=";
 const SHAPE_KEY_VALUE_SEP = ":";
 const SHAPE_ENTRY_SEP = ";";
@@ -55,7 +56,7 @@ let lastMousePos = { x: 0, y: 0 };
 let drawState = null; // while creating a shape by drag
 let pendingState = null; // lorsqu'on a modifié le whiteboard et qu'on attend la confirmation du serveur
 let dragState = null; // while moving / resizing
-let lockedState = { from_other: true, from_self: false }; // permet de vérouiller l'interaction avec le whiteboard lorsqu'un autre client est en train de faire une modification pour éviter les conflits d'état
+let scState = { from_other: true, from_self: false, fun_to_call: null }; // permet de vérouiller l'interaction avec le whiteboard lorsqu'un autre client est en train de faire une modification pour éviter les conflits d'état
 
 // ==================================================
 // MISE EN PLACE DU WHITE BOARD
@@ -247,7 +248,7 @@ function getHandlePointsCircle(cx, cy, r) {
 // Retourne : TODO
 function redraw() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-  if (lockedState.from_other) {
+  if (scState.from_other) {
     ctx.fillStyle = "#ff5555cc";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
   }
@@ -486,10 +487,13 @@ function getPos(e) {
 // sinon vérifie si une forme est cliquée pour la sélectionner et entrer en mode "move".
 // Pour l'outil de texte, crée une nouvelle forme de texte à la position du clic et invite l'utilisateur à saisir le contenu du texte.
 canvas.addEventListener("mousedown", (e) => {
-  if (pendingState || lockedState.from_other) return; // On ignore les clics de souris tant qu'on attend la confirmation du serveur pour éviter les conflits d'état.
+  if (pendingState || scState.from_other) return; // On ignore les clics de souris tant qu'on attend la confirmation du serveur pour éviter les conflits d'état.
 
-  lock_others();
+  ask_for_sc();
+  scState.fun_to_call = processMouseDown.bind(null, e);
+});
 
+function processMouseDown(e) {
   const { x, y } = getPos(e);
   isMouseDown = true;
   mouseStart = { x, y };
@@ -553,14 +557,14 @@ canvas.addEventListener("mousedown", (e) => {
         color: currentColor(),
       };
       operation = encode(s);
-      sendOut(operation);
+      sendOutOpe(operation);
       pendingState = { op: operation, previewShape: s, selected: false };
       redraw();
     }
   } else {
     drawState = { type: tool, startX: x, startY: y, previewShape: null };
   }
-});
+}
 
 // Met à jour le style du curseur en fonction de l'outil sélectionné
 // et de la position de la souris par rapport aux formes sur le canvas.
@@ -595,7 +599,7 @@ function updateCursorStyle(x, y) {
 // et effectuer les actions appropriées en fonction de l'état actuel de l'interaction
 // (par exemple, déplacer une forme, redimensionner une forme, ou mettre à jour le style du curseur).
 canvas.addEventListener("mousemove", (e) => {
-  if (pendingState || lockedState.from_other) return; // On ignore les mouvements de souris tant qu'on attend la confirmation du serveur pour éviter les conflits d'état.
+  if (pendingState || scState.from_other) return; // On ignore les mouvements de souris tant qu'on attend la confirmation du serveur pour éviter les conflits d'état.
   const { x, y } = getPos(e);
   lastMousePos = { x, y };
 
@@ -660,7 +664,7 @@ canvas.addEventListener("mousemove", (e) => {
 // (par exemple, terminer le déplacement ou le redimensionnement d'une forme, ou créer une nouvelle forme à partir du dessin en cours).
 // Envoie les mises à jour nécessaires au serveur et réinitialise les états d'interaction.
 canvas.addEventListener("mouseup", (e) => {
-  if (pendingState || lockedState.from_other) return; // On ignore les clics de souris tant qu'on attend la confirmation du serveur pour éviter les conflits d'état.
+  if (pendingState || scState.from_other) return; // On ignore les clics de souris tant qu'on attend la confirmation du serveur pour éviter les conflits d'état.
 
   const { x, y } = getPos(e);
 
@@ -678,7 +682,7 @@ canvas.addEventListener("mouseup", (e) => {
     }
     if (Object.keys(diff).length > 0) {
       operation = encode({ op: "update", id: s.id, ...diff });
-      sendOut(operation);
+      sendOutOpe(operation);
       pendingState = { op: operation, previewShape: s, selected: true };
     }
     dragState = null;
@@ -704,7 +708,7 @@ canvas.addEventListener("mouseup", (e) => {
       };
 
       operation = encode(s);
-      sendOut(operation);
+      sendOutOpe(operation);
       pendingState = { op: operation, previewShape: ps, selected: false };
     } else {
       addToLog("Shape too small, ignoring");
@@ -712,6 +716,7 @@ canvas.addEventListener("mouseup", (e) => {
   }
 
   isMouseDown = false;
+  end_sc();
   drawState = null;
   redraw();
 });
@@ -805,9 +810,14 @@ function cssToHex(c) {
 // Retourne : TODO
 function propChanged(key, val) {
   if (!selectedId || !shapes[selectedId]) return;
-  if (pendingState || lockedState.from_other) return; // On ignore les changements de propriétés tant qu'on attend la confirmation du serveur pour éviter les conflits d'état.
+  if (pendingState || scState.from_other) return; // On ignore les changements de propriétés tant qu'on attend la confirmation du serveur pour éviter les conflits d'état.
+  ask_for_sc();
+  scState.fun_to_call = processPropChanged.bind(null, key, val);
+}
+
+function processPropChanged(key, val) {
   operation = encode({ op: "update", id: selectedId, [key]: val });
-  sendOut(operation);
+  sendOutOpe(operation);
   ps = { ...shapes[selectedId], [key]: val };
   pendingState = {
     op: operation,
@@ -885,10 +895,10 @@ document.querySelectorAll(".tool-btn[data-tool]").forEach((btn) => {
 // Paramètres : aucun
 // Retourne : TODO
 function deleteSelected() {
-  if (pendingState || lockedState.from_other) return;
+  if (pendingState || scState.from_other) return;
   if (!selectedId) return;
   operation = encode({ op: "delete", id: selectedId });
-  sendOut(operation);
+  sendOutOpe(operation);
   pendingState = {
     op: operation,
     previewShape: shapes[selectedId],
@@ -897,19 +907,27 @@ function deleteSelected() {
   redraw();
 }
 
-document.getElementById("delete-btn").addEventListener("click", deleteSelected);
-document.getElementById("clear-btn").addEventListener("click", () => {
-  if (pendingState || lockedState.from_other) return;
+function clearBoard() {
   selectShape(null);
   operation = encode({ op: "clear" });
-  sendOut(operation);
+  sendOutOpe(operation);
   pendingState = { op: operation, previewShape: null, selected: false };
   redraw();
+}
+
+document.getElementById("delete-btn").addEventListener("click", () => {
+  ask_for_sc();
+  scState.fun_to_call = deleteSelected;
+});
+document.getElementById("clear-btn").addEventListener("click", () => {
+  if (pendingState || scState.from_other) return;
+  ask_for_sc();
+  scState.fun_to_call = clearBoard;
 });
 
 // Gère les raccourcis clavier pour les outils de dessin, la sélection, la suppression et l'échappement.
 window.addEventListener("keydown", (e) => {
-  if (pendingState || lockedState.from_other) return;
+  if (pendingState || scState.from_other) return;
   if (e.target.tagName === "INPUT") return;
   const map = {
     v: "select",
@@ -951,15 +969,16 @@ document.getElementById("connecter").onclick = function (evt) {
 
   ws = new WebSocket("ws://" + host + ":" + port + "/ws");
   ws.onopen = function (evt) {
-    lockedState = { from_other: false, from_self: false };
+    scState = { from_other: false, from_self: false };
     addToLog("[INFO] Websocket ouverte");
     document.title = "🌐 " + port;
+    redraw();
   };
 
   ws.onclose = function (evt) {
     shapes = {};
     pendingState = null;
-    lockedState = { from_other: true, from_self: false };
+    scState = { from_other: true, from_self: false };
     redraw();
     addToLog("[INFO] Websocket fermée");
     ws = null;
@@ -993,10 +1012,38 @@ document.getElementById("fermer").onclick = function (evt) {
 // Paramètres : msg (une chaîne de caractères représentant le message reçu du serveur, encodé selon le protocole défini)
 // Retourne : TODO
 function handleReceive(msg) {
-  var [prefix, ope] = msg.split(MSG_KEY_VALUE_SEP);
+  var [prefix, value] = msg.split(MSG_KEY_VALUE_SEP);
   switch (prefix) {
     case "data": {
-      applyMsg(ope);
+      scState.from_other = false;
+      applyMsg(value);
+      break;
+    }
+    case "section_critique": {
+      switch (value) {
+        case "debut_sc":
+          scState.from_self = true;
+          addToLog("[INFO] debut sc");
+          scState.fun_to_call?.();
+          scState.fun_to_call = null;
+          break;
+        case "fin_sc":
+          if (scState.from_self) {
+            scState.from_self = false;
+            addToLog("[INFO] fin sc");
+          } else {
+            addToLog(
+              "[WARN] I got fin_sc but I wasn't in a critical section, this is unexpected.",
+            );
+          }
+          break;
+        case "other":
+          scState.from_other = true;
+          addToLog("[INFO] Another user is performing an action...");
+          redraw();
+          break;
+      }
+      break;
     }
   }
 }
@@ -1006,6 +1053,10 @@ function handleReceive(msg) {
 // Retourne : TODO
 function applyMsg(ope) {
   const d = decode(ope);
+  if (d === "") {
+    redraw();
+    return;
+  }
 
   if (pendingState && pendingState.op !== ope) {
     // L'opération reçue ne correspond pas à celle en attente, ce n'est pas censé avoir lieu.
@@ -1016,12 +1067,6 @@ function applyMsg(ope) {
         pendingState.op,
     );
   }
-
-  if (d.op === "lock" && !lockedState.from_self) {
-    lockedState.from_other = true;
-    addToLog("[INFO] Locked by another user");
-  } else if (d.op !== "lock")
-    lockedState = { from_other: false, from_self: false }; // On considère que toute opération reçue du serveur signifie que le verrouillage par un autre utilisateur est levé, sauf si l'opération reçue est elle-même une opération de verrouillage ("lock"), auquel cas on maintient l'état de verrouillage.
 
   if (d.op === "delete") {
     delete shapes[d.id];
@@ -1066,26 +1111,48 @@ function applyMsg(ope) {
 // Envoie une opération déjà encodée au serveur via la WebSocket, après avoir vérifié que la connexion est établie. Affiche l'opération dans les logs avec le préfixe "[OUT]".
 // Paramètres : operation (une chaîne de caractères représentant l'opération à envoyer, déjà encodée selon le protocole défini)
 // Retourne : TODO
-async function sendOut(operation) {
+async function sendOutOpe(operation) {
+  if (scState.from_other) {
+    addToLog(
+      "[WARN] Cannot perform action while another user is performing an action.",
+    );
+    return false;
+  }
   if (!ws) {
     return false;
   }
 
   addToLog("[OUT] " + operation);
 
-  await updateRemote(operation);
+  await sendWs({ section_critique: "deactivate", data: operation });
 
   return false;
 }
 
-function lock_others() {
-  sendOut(encode({ op: "lock" }));
-  lockedState.from_self = true;
+function ask_for_sc() {
+  sendWs({ section_critique: "activate" });
 }
 
-const updateRemote = async (newOperation) => {
-  ws.send("data" + MSG_KEY_VALUE_SEP + newOperation);
-};
+// Envoie un message au serveur pour indiquer la fin d'une section critique, permettant ainsi à d'autres utilisateurs de commencer leurs actions. Utilisée lorsqu'aucune action n'a été effectuée après l'activation de la section critique.
+function end_sc() {
+  sendWs({ section_critique: "deactivate", data: "" });
+}
+
+function sendWs(obj) {
+  if (!ws) {
+    return false;
+  }
+  let msg = "";
+  for (const [k, v] of Object.entries(obj)) {
+    msg +=
+      MSG_ENTRY_SEP +
+      MSG_KEY_VALUE_SEP +
+      k.toString() +
+      MSG_KEY_VALUE_SEP +
+      obj[k].toString();
+  }
+  ws.send(msg);
+}
 
 // ==================================================
 // LOGS
@@ -1127,7 +1194,7 @@ function addToLog(message) {
 document.getElementById("snapshot").onclick = function (evt) {
   if (ws) {
     addToLog("[OUT] SNAPSHOT");
-    ws.send("snapshot" + MSG_KEY_VALUE_SEP + "true");
+    sendWs({ snapshot: "true" });
     return;
   }
   addToLog("SNAPSHOT IMPOSSIBLE : ws close");
