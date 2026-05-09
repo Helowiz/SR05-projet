@@ -11,9 +11,9 @@ import (
 )
 
 type Snapshot struct {
-	SiteID    int              `json:"site_id"`
-	Timestamp time.Time        `json:"timestamp"` //TODO horloge vectorielle
-	Board     shape.WhiteBoard `json:"board"`
+	SiteID      int              `json:"site_id"`
+	HorlogeVect map[int]int      `json:"horloge_vect"` //TODO horloge vectorielle
+	Board       shape.WhiteBoard `json:"board"`
 }
 
 type GlobalSnapshot struct {
@@ -29,24 +29,23 @@ func Shot(board shape.WhiteBoard, id string) *Snapshot {
 	}
 
 	snapshot := &Snapshot{
-		SiteID:    i,
-		Timestamp: time.Now(),
-		Board:     board,
+		SiteID: i,
+		Board:  board,
 	}
 	return snapshot
 }
 
-func SaveSnapshot(snapshot *Snapshot) {
-	data, err := json.Marshal(snapshot)
+func SaveSnapshot(global *GlobalSnapshot) {
+	data, err := json.MarshalIndent(global, "", "  ")
 	if err != nil {
-		display.Error("SNAPSHOT", "saveLocalSnapshot", err.Error())
+		display.Error("SNAPSHOT", "SaveGlobalSnapshot", err.Error())
 		return
 	}
 
-	filename := fmt.Sprintf("snapshot_site_%d_%s.json", snapshot.SiteID, snapshot.Timestamp.Format("20060102_150405"))
+	filename := fmt.Sprintf("global_snapshot_%s.json", time.Now().Format("20060102_150405")) //TODO mettre horloge
 	err = os.WriteFile(filename, data, 0644)
 	if err != nil {
-		display.Error("SNAPSHOT", "saveLocalSnapshot", err.Error())
+		display.Error("SNAPSHOT", "SaveGlobalSnapshot", err.Error())
 		return
 	}
 }
