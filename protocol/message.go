@@ -9,6 +9,11 @@ import (
 var fieldsep = "/"
 var keyvalsep = "="
 
+type Interval struct {
+	debut int
+	fin   int
+}
+
 func Msg_format(key string, val string) string {
 	return fieldsep + keyvalsep + key + keyvalsep + val
 }
@@ -101,3 +106,50 @@ func ParseEntry(entry string, name string) (string, string) {
 	}
 	return kv[0], kv[1]
 }
+
+func UpdateIntervals(interval_map map[int][]Interval, id_site int, num int) bool {
+	if len(interval_map[id_site]) == 0 {
+		interval_map[id_site] = append(interval_map[id_site], Interval{num, num})
+		return false
+	}
+
+	last_interval := interval_map[id_site][0]
+	
+	for index, inter := range interval_map[id_site] {
+		if num >= inter.debut && num <= inter.fin { // dans un interval
+			return true
+		}
+
+		if inter.debut - 1== num {
+			inter.debut = num
+			if index > 0 { // au moins 2 intervalles pr merge
+					newInterval, ok := mergeIntervals(last_interval)
+			}
+		
+			
+
+		}
+
+
+	}
+
+}
+
+/* verifie si c'est possible de joindre deux intervalles et le fait si c'est possible
+args : deux intervales
+sortie : (intervale merged, true) si joignable, (intervalle nulle, false) sinon
+*/
+func mergeIntervals(a Interval, b Interval) (Interval, bool){
+	
+	if (a.debut < b.debut && a.fin < b.debut) || (a.debut > b.debut && a.debut > b.fin) {
+		return Interval{0,0}, false
+	} else {
+		return Interval{min(a.debut, b.debut), max(a.fin, b.fin)} , true
+	}
+}
+// [(1,3), (5,5), (7,8)] 6 and 4 missing
+// reveive 4
+//  [(1,5), (7,8)]
+
+[1, 4] [2, 5]
+

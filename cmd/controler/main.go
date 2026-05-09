@@ -29,7 +29,8 @@ var proc_name string // nom du site (passe en param)
 var n_sites int      // nombre de sites (passe en param)
 
 var messages_recus = make(map[Estampille]struct{}) // map juste pour verifier l'existence des messages
-var app_en_sc bool = false                         // indique si l'app est en section critique
+
+var app_en_sc bool = false // indique si l'app est en section critique
 
 var map_file = make(map[int]EltMapFile) // map pour la file d'attente
 var horloge_vect = make(map[int]int)    // map pour l'horloge vectorielles
@@ -436,9 +437,6 @@ func main() {
 	proc_name = *p_nom
 	this_id = os.Getpid() // assigner notre pid a la variable global
 	n_sites = *p_nbsites  // nombre de sites
-
-	// on note le nombre de sites
-	n_sites = *p_nbsites
 
 	//initialisation de l'horloge vectorielle
 	horloge_vect[this_id] = 0
