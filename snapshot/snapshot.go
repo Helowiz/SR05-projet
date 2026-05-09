@@ -16,9 +16,12 @@ type Snapshot struct {
 	Board     shape.WhiteBoard `json:"board"`
 }
 
-func Shot(board shape.WhiteBoard, id string) *Snapshot {
-	display.Info("SNAP", "snapshot", board.String())
+type GlobalSnapshot struct {
+	States     []Snapshot `json:"states"`
+	MsgChannel []string   `json:"channel"` // Ce qu'il y a dans les canaux
+}
 
+func Shot(board shape.WhiteBoard, id string) *Snapshot {
 	i, err := strconv.Atoi(id)
 	if err != nil {
 		display.Error("SNAPSHOT", "shot", err.Error())
@@ -30,19 +33,15 @@ func Shot(board shape.WhiteBoard, id string) *Snapshot {
 		Timestamp: time.Now(),
 		Board:     board,
 	}
-
-	//saveLocalSnapshot(snapshot)
 	return snapshot
-
 }
 
-func saveSnapshot(snapshot *Snapshot) {
+func SaveSnapshot(snapshot *Snapshot) {
 	data, err := json.Marshal(snapshot)
 	if err != nil {
 		display.Error("SNAPSHOT", "saveLocalSnapshot", err.Error())
 		return
 	}
-	//isplay.Info("SNAPSHOT", "snapshot", string(data))
 
 	filename := fmt.Sprintf("snapshot_site_%d_%s.json", snapshot.SiteID, snapshot.Timestamp.Format("20060102_150405"))
 	err = os.WriteFile(filename, data, 0644)
@@ -52,25 +51,7 @@ func saveSnapshot(snapshot *Snapshot) {
 	}
 }
 
-func SaveGlobalSnapshot(allLocalSnapshot []Snapshot) {
-	globalBoard := shape.Empty_board()
-
-	for _, snap := range allLocalSnapshot {
-		for id, shape := range snap.Board.Shapes {
-			globalBoard.AddShape(id, shape)
-		}
-	}
-
-	globalSnapshot := Snapshot{
-		SiteID:    allLocalSnapshot[0].SiteID,
-		Timestamp: allLocalSnapshot[0].Timestamp, //TODO Horloge Vecotrielle
-		Board:     globalBoard,
-	}
-
-	saveSnapshot(&globalSnapshot)
-}
-
-func SnapshotToString(snap *Snapshot) (string, error) {
+func ToString(snap *Snapshot) (string, error) {
 	data, err := json.Marshal(snap)
 	if err != nil {
 		return "", err
@@ -78,11 +59,27 @@ func SnapshotToString(snap *Snapshot) (string, error) {
 	return string(data), nil
 }
 
-func StringToSnapshot(data string) (*Snapshot, error) {
+func ToSnapshot(data string) (*Snapshot, error) {
 	var snap Snapshot
 	err := json.Unmarshal([]byte(data), &snap)
 	if err != nil {
 		return nil, err
 	}
 	return &snap, nil
+}
+
+func Merge(globalSnapshot *GlobalSnapshot, receiveSnapshot *Snapshot) *GlobalSnapshot {
+	if globalSnapshot == nil {
+		globalSnapshot = &GlobalSnapshot{
+			States:     make([]Snapshot, 0),
+			MsgChannel: make([]string, 0),
+		}
+	}
+	globalSnapshot.States = append(globalSnapshot.States, *receiveSnapshot)
+	return globalSnapshot
+}
+
+func MergeMsg(global *GlobalSnapshot, msg string) *GlobalSnapshot {
+	global.MsgChannel = append(global.MsgChannel, msg)
+	return global
 }
