@@ -134,15 +134,13 @@ func parse_ctl_message(msg string) {
 	// si le msg est bien un msg de l'app (et pas de la snapshot)
 	isAppMsg := msg_content == "requete" || msg_content == "accuse" || msg_content == "liberation"
 
-	if receiveColor == RED && color == WHITE { // signal pour prendre une snapshot
-		color = RED
-		stopSnapshot = true
-		sendToApp("snapshot_app", protocol.VectToString(horloge_vect))
-	}
-
 	if isAppMsg && receiveColor == WHITE && color == RED { // msg prepost
-		msgToSend := "prepost" + protocol.Msg_format("value", protocol.Findval(msg, "msg", proc_name))
-		envoyer_tous(msgToSend)
+		if initiator {
+			handlePrepostMsg(protocol.Findval(msg, "msg", proc_name))
+		} else {
+			msgToSend := "prepost" + protocol.Msg_format("value", protocol.Findval(msg, "msg", proc_name))
+			envoyer_tous(msgToSend)
+		}
 	}
 
 	if err != nil {
@@ -186,17 +184,14 @@ func parse_ctl_message(msg string) {
 			globalState = snapshot.Merge(globalState, receiveSnapshot)
 			nbStateExpected--
 			nbMsgExpected = nbMsgExpected + receiveTotal
+			display.Info("", "STATE", "Etat attendu : "+strconv.Itoa(nbStateExpected)+" message attentu : "+strconv.Itoa(nbMsgExpected))
 			if nbStateExpected == 0 && nbMsgExpected == 0 {
 				endSnapshot()
 			}
 		}
 	case "prepost":
 		if initiator {
-			nbMsgExpected--
-			globalState = snapshot.MergeMsg(globalState, msg)
-			if nbStateExpected == 0 && nbMsgExpected == 0 {
-				endSnapshot()
-			}
+			handlePrepostMsg(msg)
 		}
 	case "reset_snapshot":
 		resetSnapshot()
@@ -218,6 +213,16 @@ func resetSnapshot() {
 	localStat = nil
 	globalState = nil
 	sauvMsg = nil
+}
+
+func handlePrepostMsg(msg string) {
+	nbMsgExpected--
+	globalState = snapshot.MergeMsg(globalState, msg)
+
+	display.Info("", "PREPOST", "Etat attendu : "+strconv.Itoa(nbStateExpected)+" message attentu : "+strconv.Itoa(nbMsgExpected))
+	if nbStateExpected == 0 && nbMsgExpected == 0 {
+		endSnapshot()
+	}
 }
 
 /* Traite un message recu de l'application de base */
@@ -453,9 +458,19 @@ func main() {
 			display.Error(*p_nom, "erreur", "Lecture stdin terminée ou en erreur: "+err.Error())
 			//return
 		}
+
 		display.Info(*p_nom, "main", "recu : "+rcvmsg)
 
 		if is_ctl_message(rcvmsg) { // reception d'un autre site
+
+			receiveColor := protocol.Findval(rcvmsg, "color", color)
+			if receiveColor == RED && color == WHITE { // signal pour prendre une snapshot
+				color = RED
+				stopSnapshot = true
+				sauvMsg = append(sauvMsg, rcvmsg)
+				sendToApp("snapshot_app", protocol.VectToString(horloge_vect))
+			}
+
 			if stopSnapshot {
 				sauvMsg = append(sauvMsg, rcvmsg)
 			} else {

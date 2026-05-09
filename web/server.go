@@ -78,10 +78,10 @@ func do_webserver(w http.ResponseWriter, r *http.Request) {
 /* Gere un message de la websocket */
 func handle_ws_msg(message string) {
 	//fmt.Println("réception : " + string(message))
-	display.Info("", "handle_ws_msg", "received : "+string(message))
+	//display.Info("", "handle_ws_msg", "received : "+string(message))
 	entries := strings.Split(message, "/")[1:] // split par / et ignore la première entrée vide
 	prefix, suffix := protocol.ParseEntry(entries[0], "handle_ws_msg")
-	display.Info("", "handle_ws_msg", "received : "+string(message))
+	//display.Info("", "handle_ws_msg", "received : "+string(message))
 
 	switch prefix {
 	case "init":
