@@ -90,7 +90,7 @@ func handle_ws_msg(message string) {
 
 	switch prefix {
 	case "init":
-		ws_send("data=" + lastOpe)
+		ws_send("data=" + suffix)
 
 	case "section_critique":
 		if suffix == "activate" {
@@ -136,7 +136,9 @@ func do_websocket(w http.ResponseWriter, r *http.Request, eventQueue chan<- Even
 
 		return
 	}
-	eventQueue <- Event{from: WEBSOCKET, content: "/=init="}
+	for _, ope := range whiteboard.ToOperations() {
+		eventQueue <- Event{from: WEBSOCKET, content: "/=init=" + ope}
+	}
 
 	for {
 		_, message, err := cnx.ReadMessage()

@@ -19,7 +19,7 @@ type Shape struct {
 	W     int    // only for rect
 	H     int    // only for rect
 	R     int    // only for circle
-	Val   string // only for text
+	Value string // only for text
 	Size  int    // only for text
 }
 
@@ -40,7 +40,7 @@ func (s Shape) toString() string {
 	case "circle":
 		str += SHAPE_ENTRY_SEP + SHAPE_KEY_VALUE_SEP + "r" + SHAPE_KEY_VALUE_SEP + strconv.Itoa(s.R)
 	case "text":
-		str += SHAPE_ENTRY_SEP + SHAPE_KEY_VALUE_SEP + "val" + SHAPE_KEY_VALUE_SEP + s.Val
+		str += SHAPE_ENTRY_SEP + SHAPE_KEY_VALUE_SEP + "value" + SHAPE_KEY_VALUE_SEP + s.Value
 		str += SHAPE_ENTRY_SEP + SHAPE_KEY_VALUE_SEP + "size" + SHAPE_KEY_VALUE_SEP + strconv.Itoa(s.Size)
 	}
 	return str
@@ -74,8 +74,8 @@ func ParseShape(s string) (Shape, error) {
 			shape.H, err = strconv.Atoi(value)
 		case "r":
 			shape.R, err = strconv.Atoi(value)
-		case "val":
-			shape.Val = value
+		case "value":
+			shape.Value = value
 		case "size":
 			shape.Size, err = strconv.Atoi(value)
 		}
@@ -102,7 +102,7 @@ func (s *Shape) set(key string, value string) error {
 	case "r":
 		s.R, err = strconv.Atoi(value)
 	case "val":
-		s.Val = value
+		s.Value = value
 	case "size":
 		s.Size, err = strconv.Atoi(value)
 	}
@@ -119,7 +119,7 @@ func (s Shape) String() string {
 	case "circle":
 		return fmt.Sprintf("%s | Rayon: %d", base, s.R)
 	case "text":
-		return fmt.Sprintf("%s | Texte: \"%s\" (Taille: %d)", base, s.Val, s.Size)
+		return fmt.Sprintf("%s | Texte: \"%s\" (Taille: %d)", base, s.Value, s.Size)
 	default:
 		return base // Pour les cas inconnus
 	}
@@ -193,7 +193,7 @@ func (wb *WhiteBoard) String() string {
 	return builder.String()
 }
 
-// parse les données à mettre à jours
+// parse les données à mettre à jour
 func GetUpdateFields(msg string) map[string]string {
 	updates := make(map[string]string)
 	entries := strings.Split(msg, SHAPE_ENTRY_SEP)
@@ -221,4 +221,15 @@ func GetUpdateFields(msg string) map[string]string {
 	}
 
 	return updates
+}
+
+// Méthode permettant de convertir un tableau blanc en une liste d'opérations au format ";:op:create;:id:shape-0007;:x:166;:y:66;:w:150;:h:55;:color:#4488ff"
+func (wb WhiteBoard) ToOperations() []string {
+	var tab_of_ope []string
+	for id, shape := range wb.Shapes {
+		ope := fmt.Sprintf(";:op:create;:id:%s", id) + shape.toString()
+		tab_of_ope = append(tab_of_ope, ope)
+	}
+	display.Info("", "ToOperations", fmt.Sprintf("Converted WhiteBoard to operations: %v", tab_of_ope))
+	return tab_of_ope
 }
