@@ -943,7 +943,10 @@ window.addEventListener("keydown", (e) => {
     document.querySelector(`[data-tool="${map[e.key]}"]`).click();
     updateCursorStyle(lastMousePos.x, lastMousePos.y);
   }
-  if (e.key === "Delete" || e.key === "Backspace") deleteSelected();
+  if (e.key === "Delete" || e.key === "Backspace") {
+    ask_for_sc();
+    scState.fun_to_call = deleteSelected;
+  }
   if (e.key === "Escape") selectShape(null);
 });
 
@@ -1023,14 +1026,14 @@ function handleReceive(msg) {
       switch (value) {
         case "debut_sc":
           scState.from_self = true;
-          addToLog("[INFO] debut sc");
+          // addToLog("[INFO] debut sc");
           scState.fun_to_call?.();
           scState.fun_to_call = null;
           break;
         case "fin_sc":
           if (scState.from_self) {
             scState.from_self = false;
-            addToLog("[INFO] fin sc");
+            // addToLog("[INFO] fin sc");
           } else {
             addToLog(
               "[WARN] I got fin_sc but I wasn't in a critical section, this is unexpected.",
