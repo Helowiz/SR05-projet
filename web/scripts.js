@@ -11,9 +11,9 @@ const TEXT_MIN_SIZE = 8;
 // ==================================================
 
 // Encode un objet en message protocolaire sous la forme ";:cle:valeur" concatenee.
-// Exemple: TODO
-// Paramètres : TODO
-// Retourne : TODO
+// Exemple : { op: "update", id: "123", x: 10 } -> ";:op:update;:id:123;:x:10"
+// Paramètres : obj (objet clé/valeur à encoder)
+// Retourne : une chaîne encodée suivant le protocole applicatif
 function encode(obj) {
   return Object.entries(obj)
     .map(
@@ -24,9 +24,9 @@ function encode(obj) {
 }
 
 // Decode un message protocolaire sous la forme ";:cle:valeur" concatenee en un objet.
-// Exemple: TODO
-// Paramètres : TODO
-// Retourne : TODO
+// Exemple : ";:op:update;:id:123;:x:10" -> { op: "update", id: "123", x: "10" }
+// Paramètres : str (chaîne encodée suivant le protocole applicatif)
+// Retourne : un objet contenant les paires clé/valeur décodées
 function decode(str) {
   return Object.fromEntries(
     str
@@ -114,8 +114,8 @@ function drawGrid() {
 }
 
 // Dessine une forme donnée sur le canvas, en appliquant les styles appropriés.
-// Paramètres : TODO
-// Retourne : TODO
+// Paramètres : s (objet forme à dessiner), selected (booléen indiquant si la forme est sélectionnée)
+// Retourne : aucun
 function drawShape(s, selected) {
   ctx.save();
   if (s.cmd === "rect") {
@@ -155,8 +155,8 @@ function drawShape(s, selected) {
 }
 
 // Dessine un rectangle de sélection autour d'une forme sélectionnée, avec une bordure en pointillés verts.
-// Paramètres : TODO
-// Retourne : TODO
+// Paramètres : x, y (coin supérieur gauche), w (largeur), h (hauteur)
+// Retourne : aucun
 function drawSelectionRect(x, y, w, h) {
   ctx.strokeStyle = "#00ff88";
   ctx.lineWidth = 1;
@@ -166,8 +166,8 @@ function drawSelectionRect(x, y, w, h) {
 }
 
 // Dessine les poignées de redimensionnement pour un rectangle.
-// Paramètres : TODO
-// Retourne : TODO
+// Paramètres : x, y (coin supérieur gauche), w (largeur), h (hauteur)
+// Retourne : aucun
 function drawHandlesRect(x, y, w, h) {
   const pts = getHandlePointsRect(x, y, w, h);
   for (const [hx, hy] of pts) {
@@ -190,8 +190,8 @@ function drawHandlesRect(x, y, w, h) {
 }
 
 // Dessine les poignées de redimensionnement pour un cercle.
-// Paramètres : TODO
-// Retourne : TODO
+// Paramètres : cx, cy (centre du cercle), r (rayon)
+// Retourne : aucun
 function drawHandlesCircle(cx, cy, r) {
   const pts = getHandlePointsCircle(cx, cy, r);
   for (const [hx, hy] of pts) {
@@ -216,8 +216,8 @@ function drawHandlesCircle(cx, cy, r) {
 // Calcule les positions des poignées de redimensionnement pour un rectangle, en fonction de ses coordonnées et dimensions.
 // 8 positions de poignées pour un rectangle (T = top, M = middle, B = bottom, L = left, C = center, R = right) :
 // TL TC TR ML MR BL BC BR.
-// Paramètres : TODO
-// Retourne : TOD
+// Paramètres : x, y (coin supérieur gauche), w (largeur), h (hauteur)
+// Retourne : un tableau de 8 couples [x, y] correspondant aux poignées
 function getHandlePointsRect(x, y, w, h) {
   return [
     [x, y],
@@ -232,8 +232,8 @@ function getHandlePointsRect(x, y, w, h) {
 }
 
 // Calcule les positions des poignées de redimensionnement pour un cercle, en fonction de son centre et de son rayon.
-// Paramètres : TODO
-// Retourne : TODO
+// Paramètres : cx, cy (centre du cercle), r (rayon)
+// Retourne : un tableau de 4 couples [x, y] (nord, est, sud, ouest)
 function getHandlePointsCircle(cx, cy, r) {
   return [
     [cx, cy - r], // Nord
@@ -245,7 +245,7 @@ function getHandlePointsCircle(cx, cy, r) {
 
 // Redessine tout le canvas en effaçant d'abord le contenu, puis en dessinant la grille de fond, les formes non sélectionnées, la forme sélectionnée (si elle existe) ou la forme en cours de dessin (si applicable) avec une opacité réduite.
 // Paramètres : aucun
-// Retourne : TODO
+// Retourne : aucun
 function redraw() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   if (scState.from_other) {
@@ -294,8 +294,8 @@ function redraw() {
 // ==================================================
 
 // Effectue un test de collision pour déterminer si les coordonnées (x, y) se trouvent à l'intérieur d'une forme. Parcourt les formes dans l'ordre inverse de leur création (du plus récent au plus ancien) pour détecter la forme la plus haute sous le curseur.
-// Paramètres : TODO
-// Retourne : TODO
+// Paramètres : x, y (coordonnées testées dans le canvas)
+// Retourne : l'id de la forme touchée, ou null si aucune forme n'est touchée
 function hitTest(x, y) {
   const ids = Object.keys(shapes).reverse();
   for (const id of ids) {
@@ -318,8 +318,8 @@ function hitTest(x, y) {
 }
 
 // Effectue un test de collision pour déterminer si les coordonnées (x, y) se trouvent à proximité d'une poignée de redimensionnement d'une forme donnée. Retourne l'identifiant de la poignée si une poignée est touchée, ou une chaine vide sinon.
-// Paramètres : TODO
-// Retourne : TODO
+// Paramètres : x, y (coordonnées testées), shape (forme à tester)
+// Retourne : une chaîne identifiant la poignée ("nw", "n", "ne", "w", "e", "sw", "s", "se") ou "" si aucune
 function hitHandle(x, y, shape) {
   if (!shape) return "";
   const hs = HANDLE_SIZE / 2 + 2;
@@ -370,8 +370,8 @@ function hitHandle(x, y, shape) {
 // ==================================================
 
 // Calcule les nouvelles propriétés d'une forme en fonction du déplacement d'une poignée de redimensionnement. Applique les règles de redimensionnement spécifiques à chaque type de forme (rectangle, cercle, texte) et impose une taille minimale pour éviter que la forme ne s'inverse ou ne disparaisse.
-// Paramètres : TODO
-// Retourne : TODO
+// Paramètres : cmd (type de forme), handleIdx (poignée manipulée), dx/dy (déplacement), orig (forme d'origine)
+// Retourne : un objet partiel contenant les propriétés mises à jour (x/y/w/h/r/size)
 function applyHandleMove(cmd, handleIdx, dx, dy, orig) {
   if (cmd === "rect") {
     let { x, y, w, h } = orig;
@@ -450,7 +450,7 @@ function applyHandleMove(cmd, handleIdx, dx, dy, orig) {
     }
     return { r: Math.max(5, Math.round(+orig.r + delta)) };
   } else if (cmd === "text") {
-    // Pour le texte, on empêche la modification de taille par les côtés (TODO : faire en sorte que les handles de côtés modifient la taille aussi)
+    // Pour le texte, la modification de taille via les poignées latérales n'est pas prise en charge.
     let { x, y, w, h } = orig;
     x = +x;
     y = +y;
@@ -746,8 +746,8 @@ canvas.addEventListener("mouseup", (e) => {
 // =========================================
 
 // Met à jour l'id de la forme sélectionnée puis rafraîchit le panneau de propriétés et redessine le canvas pour refléter la sélection.
-// Paramètres : TODO
-// Retourne : TODO
+// Paramètres : id (identifiant de la forme à sélectionner, ou null pour désélectionner)
+// Retourne : aucun
 function selectShape(id) {
   selectedId = id;
   updatePropsPanel();
@@ -758,8 +758,8 @@ function selectShape(id) {
 // Affiche les propriétés pertinentes pour le type de forme sélectionné (rectangle, cercle, texte)
 // et remplit les champs avec les valeurs actuelles de la forme.
 // Si aucune forme n'est sélectionnée, affiche un message indiquant qu'aucune sélection n'est active.
-// Paramètres : TODO
-// Retourne : TODO
+// Paramètres : aucun
+// Retourne : aucun
 function updatePropsPanel() {
   const s = shapes[selectedId];
   document.getElementById("no-selection").style.display = s ? "none" : "block";
@@ -799,8 +799,8 @@ function updatePropsPanel() {
 // et retourne une chaîne de caractères représentant la couleur au format hexadécimal (#RRGGBB).
 // Si la couleur est déjà au format hexadécimal, elle est retournée telle quelle.
 // Si la couleur est invalide ou non définie, une couleur par défaut est retournée.
-// Paramètres : TODO
-// Retourne : TODO
+// Paramètres : c (valeur CSS de couleur à convertir)
+// Retourne : une chaîne hexadécimale (#RRGGBB)
 function cssToHex(c) {
   // Si la couleur est undefined ou null, on retourne une couleur par défaut (bleu clair dans ce cas).
   if (!c) return "#4488ff";
@@ -827,7 +827,7 @@ function cssToHex(c) {
 // Paramètres :
 //  - key (la clé de la propriété modifiée),
 //  - val (la nouvelle valeur de la propriété)
-// Retourne : TODO
+// Retourne : aucun
 function propChanged(key, val) {
   if (!selectedId || !shapes[selectedId]) return;
   if (pendingState || scState.from_other) return; // On ignore les changements de propriétés tant qu'on attend la confirmation du serveur pour éviter les conflits d'état.
@@ -913,7 +913,7 @@ document.querySelectorAll(".tool-btn[data-tool]").forEach((btn) => {
 // Gère la suppression de la forme sélectionnée en envoyant une opération de suppression au serveur,
 // en supprimant la forme du tableau local et en désélectionnant la forme.
 // Paramètres : aucun
-// Retourne : TODO
+// Retourne : aucun
 function deleteSelected() {
   if (pendingState || scState.from_other) return;
   if (!selectedId) return;
@@ -1033,7 +1033,7 @@ document.getElementById("fermer").onclick = function (evt) {
 // puis en appelant la fonction appropriée pour appliquer les changements
 // au white board en fonction du type de message (par exemple, mise à jour des données).
 // Paramètres : msg (une chaîne de caractères représentant le message reçu du serveur, encodé selon le protocole défini)
-// Retourne : TODO
+// Retourne : aucun
 function handleReceive(msg) {
   var [prefix, value] = msg.split(MSG_KEY_VALUE_SEP);
   switch (prefix) {
@@ -1073,7 +1073,7 @@ function handleReceive(msg) {
 
 // Applique une opération reçue du serveur en mettant à jour les données du white board en conséquence. Gère les différentes opérations possibles (création, mise à jour, suppression de formes, effacement total) et met à jour la sélection si nécessaire.
 // Paramètres : ope (une chaîne de caractères représentant l'opération reçue du serveur, encodée selon le protocole défini)
-// Retourne : TODO
+// Retourne : aucun
 function applyMsg(ope) {
   const d = decode(ope);
   if (d === "") {
@@ -1133,7 +1133,7 @@ function applyMsg(ope) {
 
 // Envoie une opération déjà encodée au serveur via la WebSocket, après avoir vérifié que la connexion est établie. Affiche l'opération dans les logs avec le préfixe "[OUT]".
 // Paramètres : operation (une chaîne de caractères représentant l'opération à envoyer, déjà encodée selon le protocole défini)
-// Retourne : TODO
+// Retourne : une promesse résolue avec false (et n'envoie rien si la connexion n'est pas disponible)
 async function sendOutOpe(operation) {
   if (scState.from_other) {
     addToLog(
