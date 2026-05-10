@@ -11,9 +11,9 @@ const TEXT_MIN_SIZE = 8;
 // ==================================================
 
 // Encode un objet en message protocolaire sous la forme ";:cle:valeur" concatenee.
-// Exemple: TODO
-// Paramètres : TODO
-// Retourne : TODO
+// Exemple : { op: "update", id: "123", x: 10 } -> ";:op:update;:id:123;:x:10"
+// Paramètres : obj (objet clé/valeur à encoder)
+// Retourne : une chaîne encodée suivant le protocole applicatif
 function encode(obj) {
   return Object.entries(obj)
     .map(
@@ -24,9 +24,9 @@ function encode(obj) {
 }
 
 // Decode un message protocolaire sous la forme ";:cle:valeur" concatenee en un objet.
-// Exemple: TODO
-// Paramètres : TODO
-// Retourne : TODO
+// Exemple : ";:op:update;:id:123;:x:10" -> { op: "update", id: "123", x: "10" }
+// Paramètres : str (chaîne encodée suivant le protocole applicatif)
+// Retourne : un objet contenant les paires clé/valeur décodées
 function decode(str) {
   return Object.fromEntries(
     str
@@ -114,8 +114,8 @@ function drawGrid() {
 }
 
 // Dessine une forme donnée sur le canvas, en appliquant les styles appropriés.
-// Paramètres : TODO
-// Retourne : TODO
+// Paramètres : s (objet forme à dessiner), selected (booléen indiquant si la forme est sélectionnée)
+// Retourne : aucun
 function drawShape(s, selected) {
   ctx.save();
   if (s.cmd === "rect") {
@@ -155,8 +155,8 @@ function drawShape(s, selected) {
 }
 
 // Dessine un rectangle de sélection autour d'une forme sélectionnée, avec une bordure en pointillés verts.
-// Paramètres : TODO
-// Retourne : TODO
+// Paramètres : x, y (coin supérieur gauche), w (largeur), h (hauteur)
+// Retourne : aucun
 function drawSelectionRect(x, y, w, h) {
   ctx.strokeStyle = "#00ff88";
   ctx.lineWidth = 1;
@@ -166,8 +166,8 @@ function drawSelectionRect(x, y, w, h) {
 }
 
 // Dessine les poignées de redimensionnement pour un rectangle.
-// Paramètres : TODO
-// Retourne : TODO
+// Paramètres : x, y (coin supérieur gauche), w (largeur), h (hauteur)
+// Retourne : aucun
 function drawHandlesRect(x, y, w, h) {
   const pts = getHandlePointsRect(x, y, w, h);
   for (const [hx, hy] of pts) {
@@ -190,8 +190,8 @@ function drawHandlesRect(x, y, w, h) {
 }
 
 // Dessine les poignées de redimensionnement pour un cercle.
-// Paramètres : TODO
-// Retourne : TODO
+// Paramètres : cx, cy (centre du cercle), r (rayon)
+// Retourne : aucun
 function drawHandlesCircle(cx, cy, r) {
   const pts = getHandlePointsCircle(cx, cy, r);
   for (const [hx, hy] of pts) {
@@ -216,8 +216,8 @@ function drawHandlesCircle(cx, cy, r) {
 // Calcule les positions des poignées de redimensionnement pour un rectangle, en fonction de ses coordonnées et dimensions.
 // 8 positions de poignées pour un rectangle (T = top, M = middle, B = bottom, L = left, C = center, R = right) :
 // TL TC TR ML MR BL BC BR.
-// Paramètres : TODO
-// Retourne : TOD
+// Paramètres : x, y (coin supérieur gauche), w (largeur), h (hauteur)
+// Retourne : un tableau de 8 couples [x, y] correspondant aux poignées
 function getHandlePointsRect(x, y, w, h) {
   return [
     [x, y],
@@ -232,8 +232,8 @@ function getHandlePointsRect(x, y, w, h) {
 }
 
 // Calcule les positions des poignées de redimensionnement pour un cercle, en fonction de son centre et de son rayon.
-// Paramètres : TODO
-// Retourne : TODO
+// Paramètres : cx, cy (centre du cercle), r (rayon)
+// Retourne : un tableau de 4 couples [x, y] (nord, est, sud, ouest)
 function getHandlePointsCircle(cx, cy, r) {
   return [
     [cx, cy - r], // Nord
@@ -245,7 +245,7 @@ function getHandlePointsCircle(cx, cy, r) {
 
 // Redessine tout le canvas en effaçant d'abord le contenu, puis en dessinant la grille de fond, les formes non sélectionnées, la forme sélectionnée (si elle existe) ou la forme en cours de dessin (si applicable) avec une opacité réduite.
 // Paramètres : aucun
-// Retourne : TODO
+// Retourne : aucun
 function redraw() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   if (scState.from_other) {
@@ -294,8 +294,8 @@ function redraw() {
 // ==================================================
 
 // Effectue un test de collision pour déterminer si les coordonnées (x, y) se trouvent à l'intérieur d'une forme. Parcourt les formes dans l'ordre inverse de leur création (du plus récent au plus ancien) pour détecter la forme la plus haute sous le curseur.
-// Paramètres : TODO
-// Retourne : TODO
+// Paramètres : x, y (coordonnées testées dans le canvas)
+// Retourne : l'id de la forme touchée, ou null si aucune forme n'est touchée
 function hitTest(x, y) {
   const ids = Object.keys(shapes).reverse();
   for (const id of ids) {
@@ -317,23 +317,39 @@ function hitTest(x, y) {
   return null;
 }
 
-// Effectue un test de collision pour déterminer si les coordonnées (x, y) se trouvent à proximité d'une poignée de redimensionnement d'une forme donnée. Retourne l'indice de la poignée touchée (0 à 7 pour un rectangle, 0 à 3 pour un cercle) ou -1 si aucune poignée n'est touchée.
-// Paramètres : TODO
-// Retourne : TODO
+// Effectue un test de collision pour déterminer si les coordonnées (x, y) se trouvent à proximité d'une poignée de redimensionnement d'une forme donnée. Retourne l'identifiant de la poignée si une poignée est touchée, ou une chaine vide sinon.
+// Paramètres : x, y (coordonnées testées), shape (forme à tester)
+// Retourne : une chaîne identifiant la poignée ("nw", "n", "ne", "w", "e", "sw", "s", "se") ou "" si aucune
 function hitHandle(x, y, shape) {
-  if (!shape) return -1;
+  if (!shape) return "";
   const hs = HANDLE_SIZE / 2 + 2;
+  const rect_handle_map = {
+    0: "nw", // Top Left
+    1: "n", // Top Center
+    2: "ne", // Top Right
+    3: "w", // Middle Left
+    4: "e", // Middle Right
+    5: "sw", // Bottom Left
+    6: "s", // Bottom Center
+    7: "se", // Bottom Right
+  };
+  const circle_handle_map = {
+    0: "n", // Top
+    1: "e", // Right
+    2: "s", // Bottom
+    3: "w", // Left
+  };
   if (shape.cmd === "rect") {
     const pts = getHandlePointsRect(+shape.x, +shape.y, +shape.w, +shape.h);
     for (let i = 0; i < pts.length; i++) {
       if (Math.abs(x - pts[i][0]) <= hs && Math.abs(y - pts[i][1]) <= hs)
-        return i;
+        return rect_handle_map[i];
     }
   } else if (shape.cmd === "circle") {
     const pts = getHandlePointsCircle(+shape.x, +shape.y, +shape.r);
     for (let i = 0; i < pts.length; i++) {
       if (Math.abs(x - pts[i][0]) <= hs && Math.abs(y - pts[i][1]) <= hs)
-        return i;
+        return circle_handle_map[i];
     }
   } else if (shape.cmd === "text") {
     // NOTE : le y du texte correspond à la ligne de base (bas du texte)
@@ -343,10 +359,10 @@ function hitHandle(x, y, shape) {
     const pts = getHandlePointsRect(+shape.x, +shape.y - h, w, h);
     for (let i = 0; i < pts.length; i++) {
       if (Math.abs(x - pts[i][0]) <= hs && Math.abs(y - pts[i][1]) <= hs)
-        return i;
+        return rect_handle_map[i];
     }
   }
-  return -1;
+  return "";
 }
 
 // ==================================================
@@ -354,8 +370,8 @@ function hitHandle(x, y, shape) {
 // ==================================================
 
 // Calcule les nouvelles propriétés d'une forme en fonction du déplacement d'une poignée de redimensionnement. Applique les règles de redimensionnement spécifiques à chaque type de forme (rectangle, cercle, texte) et impose une taille minimale pour éviter que la forme ne s'inverse ou ne disparaisse.
-// Paramètres : TODO
-// Retourne : TODO
+// Paramètres : cmd (type de forme), handleIdx (poignée manipulée), dx/dy (déplacement), orig (forme d'origine)
+// Retourne : un objet partiel contenant les propriétés mises à jour (x/y/w/h/r/size)
 function applyHandleMove(cmd, handleIdx, dx, dy, orig) {
   if (cmd === "rect") {
     let { x, y, w, h } = orig;
@@ -365,37 +381,37 @@ function applyHandleMove(cmd, handleIdx, dx, dy, orig) {
     w = +w;
     h = +h;
     switch (handleIdx) {
-      case 0: // TL
+      case "nw": // TL
         x += dx;
         y += dy;
         w -= dx;
         h -= dy;
         break;
-      case 1: // TC
+      case "n": // TC
         y += dy;
         h -= dy;
         break;
-      case 2: // TR
+      case "ne": // TR
         y += dy;
         w += dx;
         h -= dy;
         break;
-      case 3: // ML
+      case "w": // ML
         x += dx;
         w -= dx;
         break;
-      case 4: // MR
+      case "e": // MR
         w += dx;
         break;
-      case 5: // BL
+      case "sw": // BL
         x += dx;
         w -= dx;
         h += dy;
         break;
-      case 6: // BC
+      case "s": // BC
         h += dy;
         break;
-      case 7: // BR
+      case "se": // BR
         w += dx;
         h += dy;
         break;
@@ -417,10 +433,24 @@ function applyHandleMove(cmd, handleIdx, dx, dy, orig) {
       h: Math.round(h),
     };
   } else if (cmd === "circle") {
-    const delta = [-dy, dx, dy, -dx][handleIdx] ?? 0;
+    let delta = 0;
+    switch (handleIdx) {
+      case "n": // Top
+        delta = -dy;
+        break;
+      case "e": // Right
+        delta = dx;
+        break;
+      case "s": // Bottom
+        delta = dy;
+        break;
+      case "w": // Left
+        delta = -dx;
+        break;
+    }
     return { r: Math.max(5, Math.round(+orig.r + delta)) };
   } else if (cmd === "text") {
-    // Pour le texte, on empêche la modification de taille par les côtés (TODO : faire en sorte que les handles de côtés modifient la taille aussi)
+    // Pour le texte, la modification de taille via les poignées latérales n'est pas prise en charge.
     let { x, y, w, h } = orig;
     x = +x;
     y = +y;
@@ -429,34 +459,34 @@ function applyHandleMove(cmd, handleIdx, dx, dy, orig) {
     // NOTE : le y du texte correspond à la ligne de base (bas du texte)
     y -= h; // On convertit le y de la ligne de base au y du coin supérieur pour réutiliser la même logique que pour les rectangles.
     switch (handleIdx) {
-      case 0: // TL
+      case "nw": // TL
         x += dx;
         y += dy;
         w -= dx;
         h -= dy;
         break;
-      case 1: // TC
+      case "n": // TC
         y += dy;
         h -= dy;
         break;
-      case 2: // TR
+      case "ne": // TR
         y += dy;
         w += dx;
         h -= dy;
         break;
-      case 3: // ML
+      case "w": // ML
         break;
-      case 4: // MR
+      case "e": // MR
         break;
-      case 5: // BL
+      case "sw": // BL
         x += dx;
         w -= dx;
         h += dy;
         break;
-      case 6: // BC
+      case "s": // BC
         h += dy;
         break;
-      case 7: // BR
+      case "se": // BR
         w += dx;
         h += dy;
         break;
@@ -504,7 +534,7 @@ function processMouseDown(e) {
     const sel = shapes[selectedId];
     if (sel) {
       const h = hitHandle(x, y, sel);
-      if (h !== -1) {
+      if (h !== "") {
         // Clic sur une poignée de redimensionnement — calcul manuel de la boîte englobante pour les formes de texte
         let origExtra = {};
         if (sel.cmd === "text") {
@@ -569,6 +599,14 @@ function processMouseDown(e) {
 // Met à jour le style du curseur en fonction de l'outil sélectionné
 // et de la position de la souris par rapport aux formes sur le canvas.
 function updateCursorStyle(x, y) {
+  if (x === undefined || y === undefined) {
+    x = lastMousePos.x;
+    y = lastMousePos.y;
+  }
+  if (pendingState?.op || scState.from_other) {
+    canvas.style.cursor = "wait";
+    return;
+  }
   if (tool !== "select") {
     canvas.style.cursor = "crosshair";
     return;
@@ -576,18 +614,8 @@ function updateCursorStyle(x, y) {
   const sel = shapes[selectedId];
   if (sel) {
     const h = hitHandle(x, y, sel);
-    if (h !== -1) {
-      const cursors = [
-        "nw-resize",
-        "n-resize",
-        "ne-resize",
-        "w-resize",
-        "e-resize",
-        "sw-resize",
-        "s-resize",
-        "se-resize",
-      ];
-      canvas.style.cursor = cursors[h] ?? "pointer";
+    if (h !== "") {
+      canvas.style.cursor = h + "-resize" ?? "pointer";
       return;
     }
   }
@@ -726,8 +754,8 @@ canvas.addEventListener("mouseup", (e) => {
 // =========================================
 
 // Met à jour l'id de la forme sélectionnée puis rafraîchit le panneau de propriétés et redessine le canvas pour refléter la sélection.
-// Paramètres : TODO
-// Retourne : TODO
+// Paramètres : id (identifiant de la forme à sélectionner, ou null pour désélectionner)
+// Retourne : aucun
 function selectShape(id) {
   selectedId = id;
   updatePropsPanel();
@@ -738,8 +766,8 @@ function selectShape(id) {
 // Affiche les propriétés pertinentes pour le type de forme sélectionné (rectangle, cercle, texte)
 // et remplit les champs avec les valeurs actuelles de la forme.
 // Si aucune forme n'est sélectionnée, affiche un message indiquant qu'aucune sélection n'est active.
-// Paramètres : TODO
-// Retourne : TODO
+// Paramètres : aucun
+// Retourne : aucun
 function updatePropsPanel() {
   const s = shapes[selectedId];
   document.getElementById("no-selection").style.display = s ? "none" : "block";
@@ -779,8 +807,8 @@ function updatePropsPanel() {
 // et retourne une chaîne de caractères représentant la couleur au format hexadécimal (#RRGGBB).
 // Si la couleur est déjà au format hexadécimal, elle est retournée telle quelle.
 // Si la couleur est invalide ou non définie, une couleur par défaut est retournée.
-// Paramètres : TODO
-// Retourne : TODO
+// Paramètres : c (valeur CSS de couleur à convertir)
+// Retourne : une chaîne hexadécimale (#RRGGBB)
 function cssToHex(c) {
   // Si la couleur est undefined ou null, on retourne une couleur par défaut (bleu clair dans ce cas).
   if (!c) return "#4488ff";
@@ -807,7 +835,7 @@ function cssToHex(c) {
 // Paramètres :
 //  - key (la clé de la propriété modifiée),
 //  - val (la nouvelle valeur de la propriété)
-// Retourne : TODO
+// Retourne : aucun
 function propChanged(key, val) {
   if (!selectedId || !shapes[selectedId]) return;
   if (pendingState || scState.from_other) return; // On ignore les changements de propriétés tant qu'on attend la confirmation du serveur pour éviter les conflits d'état.
@@ -893,10 +921,8 @@ document.querySelectorAll(".tool-btn[data-tool]").forEach((btn) => {
 // Gère la suppression de la forme sélectionnée en envoyant une opération de suppression au serveur,
 // en supprimant la forme du tableau local et en désélectionnant la forme.
 // Paramètres : aucun
-// Retourne : TODO
+// Retourne : aucun
 function deleteSelected() {
-  if (pendingState || scState.from_other) return;
-  if (!selectedId) return;
   operation = encode({ op: "delete", id: selectedId });
   sendOutOpe(operation);
   pendingState = {
@@ -916,6 +942,8 @@ function clearBoard() {
 }
 
 document.getElementById("delete-btn").addEventListener("click", () => {
+  if (pendingState || scState.from_other) return;
+  if (!selectedId) return;
   ask_for_sc();
   scState.fun_to_call = deleteSelected;
 });
@@ -941,9 +969,14 @@ window.addEventListener("keydown", (e) => {
   };
   if (map[e.key]) {
     document.querySelector(`[data-tool="${map[e.key]}"]`).click();
-    updateCursorStyle(lastMousePos.x, lastMousePos.y);
+    updateCursorStyle();
   }
-  if (e.key === "Delete" || e.key === "Backspace") deleteSelected();
+  if (e.key === "Delete" || e.key === "Backspace") {
+    if (pendingState || scState.from_other) return;
+    if (!selectedId) return;
+    ask_for_sc();
+    scState.fun_to_call = deleteSelected;
+  }
   if (e.key === "Escape") selectShape(null);
 });
 
@@ -973,6 +1006,7 @@ document.getElementById("connecter").onclick = function (evt) {
     addToLog("[INFO] Websocket ouverte");
     document.title = "🌐 " + port;
     redraw();
+    updateCursorStyle();
   };
 
   ws.onclose = function (evt) {
@@ -1010,7 +1044,7 @@ document.getElementById("fermer").onclick = function (evt) {
 // puis en appelant la fonction appropriée pour appliquer les changements
 // au white board en fonction du type de message (par exemple, mise à jour des données).
 // Paramètres : msg (une chaîne de caractères représentant le message reçu du serveur, encodé selon le protocole défini)
-// Retourne : TODO
+// Retourne : aucun
 function handleReceive(msg) {
   var [prefix, value] = msg.split(MSG_KEY_VALUE_SEP);
   switch (prefix) {
@@ -1023,14 +1057,14 @@ function handleReceive(msg) {
       switch (value) {
         case "debut_sc":
           scState.from_self = true;
-          addToLog("[INFO] debut sc");
+          // addToLog("[INFO] debut sc");
           scState.fun_to_call?.();
           scState.fun_to_call = null;
           break;
         case "fin_sc":
           if (scState.from_self) {
             scState.from_self = false;
-            addToLog("[INFO] fin sc");
+            // addToLog("[INFO] fin sc");
           } else {
             addToLog(
               "[WARN] I got fin_sc but I wasn't in a critical section, this is unexpected.",
@@ -1046,11 +1080,12 @@ function handleReceive(msg) {
       break;
     }
   }
+  updateCursorStyle();
 }
 
 // Applique une opération reçue du serveur en mettant à jour les données du white board en conséquence. Gère les différentes opérations possibles (création, mise à jour, suppression de formes, effacement total) et met à jour la sélection si nécessaire.
 // Paramètres : ope (une chaîne de caractères représentant l'opération reçue du serveur, encodée selon le protocole défini)
-// Retourne : TODO
+// Retourne : aucun
 function applyMsg(ope) {
   const d = decode(ope);
   if (d === "") {
@@ -1110,7 +1145,7 @@ function applyMsg(ope) {
 
 // Envoie une opération déjà encodée au serveur via la WebSocket, après avoir vérifié que la connexion est établie. Affiche l'opération dans les logs avec le préfixe "[OUT]".
 // Paramètres : operation (une chaîne de caractères représentant l'opération à envoyer, déjà encodée selon le protocole défini)
-// Retourne : TODO
+// Retourne : une promesse résolue avec false (et n'envoie rien si la connexion n'est pas disponible)
 async function sendOutOpe(operation) {
   if (scState.from_other) {
     addToLog(
@@ -1123,6 +1158,7 @@ async function sendOutOpe(operation) {
   }
 
   addToLog("[OUT] " + operation);
+  updateCursorStyle();
 
   await sendWs({ section_critique: "deactivate", data: operation });
 
