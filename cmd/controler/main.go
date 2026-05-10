@@ -27,8 +27,9 @@ var h = 0            // horloge du site
 var this_id int      // id du site (passe en param)
 var proc_name string // nom du site (passe en param)
 var n_sites int      // nombre de sites (passe en param)
+var n_msg = 0        // num serie messages
 
-var messages_recus = make(map[Estampille]struct{}) // map juste pour verifier l'existence des messages
+var intervalles_recus = make(map[int][]protocol.Interval) // check si on a deja recu
 
 var app_en_sc bool = false // indique si l'app est en section critique
 
@@ -269,25 +270,29 @@ func parse_app_msg(msg string) {
 }
 
 func envoyer(msg string, id int) {
+	n_msg++
 	est := Estampille{this_id, h}
+
 	horloge_vect_str := protocol.VectToString(horloge_vect)
-	sendToCtl(protocol.Msg_format("target", strconv.Itoa(id)) + protocol.Msg_format("id", strconv.Itoa(est.id_site)) + protocol.Msg_format("hlg", strconv.Itoa(est.val_h)) + protocol.Msg_format("hlgvect", horloge_vect_str) + protocol.Msg_format("msg", msg) + protocol.Msg_format("color", color))
-	messages_recus[est] = struct{}{} // on ne veux pas traiter nos propres messages donc c'est comme si on l'avait deja recu
+	sendToCtl(protocol.Msg_format("n_msg", strconv.Itoa(n_msg)) + protocol.Msg_format("target", strconv.Itoa(id)) + protocol.Msg_format("id", strconv.Itoa(est.id_site)) + protocol.Msg_format("hlg", strconv.Itoa(est.val_h)) + protocol.Msg_format("hlgvect", horloge_vect_str) + protocol.Msg_format("msg", msg) + protocol.Msg_format("color", color))
 }
+
 func envoyer_tous(msg string) {
+	n_msg++
 	est := Estampille{this_id, h}
+
 	horloge_vect_str := protocol.VectToString(horloge_vect)
 	// id=id_site hlg=val_h msg=msg
-	sendToCtl(protocol.Msg_format("id", strconv.Itoa(est.id_site)) + protocol.Msg_format("hlg", strconv.Itoa(est.val_h)) + protocol.Msg_format("hlgvect", horloge_vect_str) + protocol.Msg_format("msg", msg) + protocol.Msg_format("color", color))
-	messages_recus[est] = struct{}{} // on ne veux pas traiter nos propres messages donc c'est comme si on l'avait deja recu
+	sendToCtl(protocol.Msg_format("n_msg", strconv.Itoa(n_msg)) + protocol.Msg_format("id", strconv.Itoa(est.id_site)) + protocol.Msg_format("hlg", strconv.Itoa(est.val_h)) + protocol.Msg_format("hlgvect", horloge_vect_str) + protocol.Msg_format("msg", msg) + protocol.Msg_format("color", color))
 }
 
 /* Envoi aux autres le signal de liberation avec les donnes a jour*/
 func envoyer_liberation(newData string) {
+	n_msg++
 	est := Estampille{this_id, h}
 	horloge_vect_str := protocol.VectToString(horloge_vect)
-	sendToCtl(protocol.Msg_format("id", strconv.Itoa(est.id_site)) + protocol.Msg_format("hlg", strconv.Itoa(est.val_h)) + protocol.Msg_format("hlgvect", horloge_vect_str) + protocol.Msg_format("msg", "liberation") + protocol.Msg_format("data", newData))
-	messages_recus[est] = struct{}{} // on ne veux pas traiter nos propres messages donc c'est comme si on l'avait deja recu
+	sendToCtl(protocol.Msg_format("n_msg", strconv.Itoa(n_msg)) + protocol.Msg_format("id", strconv.Itoa(est.id_site)) + protocol.Msg_format("hlg", strconv.Itoa(est.val_h)) + protocol.Msg_format("hlgvect", horloge_vect_str) + protocol.Msg_format("msg", "liberation") + protocol.Msg_format("data", newData))
+
 }
 
 /* Envoi un message a l'app (just stdout car l'app y est connectee) */
@@ -400,17 +405,27 @@ func rec_accuse_sc(est Estampille) {
 func handleMsg(msg string) {
 	targetId := protocol.Findval(msg, "target", proc_name)
 
-	// extraire l'estampille
 	est, err := estampille_from_msg(msg)
 	if err != nil {
-		display.Error(proc_name, "erreur", "Erreur estampille: "+err.Error())
+
+	}
+
+	// traite pas nos propre msg
+	if est.id_site == this_id {
 		return
 	}
 
-	if _, ok := messages_recus[est]; ok {
+	nmsg_recu_str := protocol.Findval(msg, "n_msg", proc_name)
+	nmsg_recu, err := strconv.Atoi(nmsg_recu_str)
+	if err != nil {
+		display.Error(proc_name, "erreur", "Erreur n_msg recu "+err.Error())
 		return
-	} // si le message a deje ete traite on fait rien
-	messages_recus[est] = struct{}{} // ajouter aux messages recus pour garder une trace
+	}
+
+	// check si deja recu, update intervalles au passage
+	if !protocol.UpdateInterval(intervalles_recus, est.id_site, nmsg_recu) {
+		return
+	}
 
 	if targetId == "" || targetId == strconv.Itoa(this_id) { // si le message est pour nous ou pour tous nous on le traite
 		if targetId == "" { // si le message est pour tous on le fait passer
@@ -451,8 +466,7 @@ func main() {
 			display.Error(*p_nom, "erreur", "Lecture stdin terminée ou en erreur: "+err.Error())
 			//return
 		}
-		display.Info(*p_nom, "main", "recu : "+rcvmsg)
-
+		//display.Info(*p_nom, "main", "recu : "+rcvmsg)
 		if is_ctl_message(rcvmsg) { // reception d'un autre site
 			if stopSnapshot {
 				sauvMsg = append(sauvMsg, rcvmsg)
