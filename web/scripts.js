@@ -1,5 +1,6 @@
 var ws;
 
+const MSG_ENTRY_SEP = "/";
 const MSG_KEY_VALUE_SEP = "=";
 const SHAPE_KEY_VALUE_SEP = ":";
 const SHAPE_ENTRY_SEP = ";";
@@ -10,9 +11,9 @@ const TEXT_MIN_SIZE = 8;
 // ==================================================
 
 // Encode un objet en message protocolaire sous la forme ";:cle:valeur" concatenee.
-// Exemple: TODO
-// Paramètres : TODO
-// Retourne : TODO
+// Exemple : { op: "update", id: "123", x: 10 } -> ";:op:update;:id:123;:x:10"
+// Paramètres : obj (objet clé/valeur à encoder)
+// Retourne : une chaîne encodée suivant le protocole applicatif
 function encode(obj) {
   return Object.entries(obj)
     .map(
@@ -23,9 +24,9 @@ function encode(obj) {
 }
 
 // Decode un message protocolaire sous la forme ";:cle:valeur" concatenee en un objet.
-// Exemple: TODO
-// Paramètres : TODO
-// Retourne : TODO
+// Exemple : ";:op:update;:id:123;:x:10" -> { op: "update", id: "123", x: "10" }
+// Paramètres : str (chaîne encodée suivant le protocole applicatif)
+// Retourne : un objet contenant les paires clé/valeur décodées
 function decode(str) {
   return Object.fromEntries(
     str
@@ -55,7 +56,7 @@ let lastMousePos = { x: 0, y: 0 };
 let drawState = null; // while creating a shape by drag
 let pendingState = null; // lorsqu'on a modifié le whiteboard et qu'on attend la confirmation du serveur
 let dragState = null; // while moving / resizing
-let lockedState = { from_other: true, from_self: false }; // permet de vérouiller l'interaction avec le whiteboard lorsqu'un autre client est en train de faire une modification pour éviter les conflits d'état
+let scState = { from_other: true, from_self: false, fun_to_call: null }; // permet de vérouiller l'interaction avec le whiteboard lorsqu'un autre client est en train de faire une modification pour éviter les conflits d'état
 
 // ==================================================
 // MISE EN PLACE DU WHITE BOARD
@@ -113,8 +114,8 @@ function drawGrid() {
 }
 
 // Dessine une forme donnée sur le canvas, en appliquant les styles appropriés.
-// Paramètres : TODO
-// Retourne : TODO
+// Paramètres : s (objet forme à dessiner), selected (booléen indiquant si la forme est sélectionnée)
+// Retourne : aucun
 function drawShape(s, selected) {
   ctx.save();
   if (s.cmd === "rect") {
@@ -154,8 +155,8 @@ function drawShape(s, selected) {
 }
 
 // Dessine un rectangle de sélection autour d'une forme sélectionnée, avec une bordure en pointillés verts.
-// Paramètres : TODO
-// Retourne : TODO
+// Paramètres : x, y (coin supérieur gauche), w (largeur), h (hauteur)
+// Retourne : aucun
 function drawSelectionRect(x, y, w, h) {
   ctx.strokeStyle = "#00ff88";
   ctx.lineWidth = 1;
@@ -165,8 +166,8 @@ function drawSelectionRect(x, y, w, h) {
 }
 
 // Dessine les poignées de redimensionnement pour un rectangle.
-// Paramètres : TODO
-// Retourne : TODO
+// Paramètres : x, y (coin supérieur gauche), w (largeur), h (hauteur)
+// Retourne : aucun
 function drawHandlesRect(x, y, w, h) {
   const pts = getHandlePointsRect(x, y, w, h);
   for (const [hx, hy] of pts) {
@@ -189,8 +190,8 @@ function drawHandlesRect(x, y, w, h) {
 }
 
 // Dessine les poignées de redimensionnement pour un cercle.
-// Paramètres : TODO
-// Retourne : TODO
+// Paramètres : cx, cy (centre du cercle), r (rayon)
+// Retourne : aucun
 function drawHandlesCircle(cx, cy, r) {
   const pts = getHandlePointsCircle(cx, cy, r);
   for (const [hx, hy] of pts) {
@@ -215,8 +216,8 @@ function drawHandlesCircle(cx, cy, r) {
 // Calcule les positions des poignées de redimensionnement pour un rectangle, en fonction de ses coordonnées et dimensions.
 // 8 positions de poignées pour un rectangle (T = top, M = middle, B = bottom, L = left, C = center, R = right) :
 // TL TC TR ML MR BL BC BR.
-// Paramètres : TODO
-// Retourne : TOD
+// Paramètres : x, y (coin supérieur gauche), w (largeur), h (hauteur)
+// Retourne : un tableau de 8 couples [x, y] correspondant aux poignées
 function getHandlePointsRect(x, y, w, h) {
   return [
     [x, y],
@@ -231,8 +232,8 @@ function getHandlePointsRect(x, y, w, h) {
 }
 
 // Calcule les positions des poignées de redimensionnement pour un cercle, en fonction de son centre et de son rayon.
-// Paramètres : TODO
-// Retourne : TODO
+// Paramètres : cx, cy (centre du cercle), r (rayon)
+// Retourne : un tableau de 4 couples [x, y] (nord, est, sud, ouest)
 function getHandlePointsCircle(cx, cy, r) {
   return [
     [cx, cy - r], // Nord
@@ -244,10 +245,10 @@ function getHandlePointsCircle(cx, cy, r) {
 
 // Redessine tout le canvas en effaçant d'abord le contenu, puis en dessinant la grille de fond, les formes non sélectionnées, la forme sélectionnée (si elle existe) ou la forme en cours de dessin (si applicable) avec une opacité réduite.
 // Paramètres : aucun
-// Retourne : TODO
+// Retourne : aucun
 function redraw() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-  if (lockedState.from_other) {
+  if (scState.from_other) {
     ctx.fillStyle = "#ff5555cc";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
   }
@@ -293,8 +294,8 @@ function redraw() {
 // ==================================================
 
 // Effectue un test de collision pour déterminer si les coordonnées (x, y) se trouvent à l'intérieur d'une forme. Parcourt les formes dans l'ordre inverse de leur création (du plus récent au plus ancien) pour détecter la forme la plus haute sous le curseur.
-// Paramètres : TODO
-// Retourne : TODO
+// Paramètres : x, y (coordonnées testées dans le canvas)
+// Retourne : l'id de la forme touchée, ou null si aucune forme n'est touchée
 function hitTest(x, y) {
   const ids = Object.keys(shapes).reverse();
   for (const id of ids) {
@@ -316,23 +317,39 @@ function hitTest(x, y) {
   return null;
 }
 
-// Effectue un test de collision pour déterminer si les coordonnées (x, y) se trouvent à proximité d'une poignée de redimensionnement d'une forme donnée. Retourne l'indice de la poignée touchée (0 à 7 pour un rectangle, 0 à 3 pour un cercle) ou -1 si aucune poignée n'est touchée.
-// Paramètres : TODO
-// Retourne : TODO
+// Effectue un test de collision pour déterminer si les coordonnées (x, y) se trouvent à proximité d'une poignée de redimensionnement d'une forme donnée. Retourne l'identifiant de la poignée si une poignée est touchée, ou une chaine vide sinon.
+// Paramètres : x, y (coordonnées testées), shape (forme à tester)
+// Retourne : une chaîne identifiant la poignée ("nw", "n", "ne", "w", "e", "sw", "s", "se") ou "" si aucune
 function hitHandle(x, y, shape) {
-  if (!shape) return -1;
+  if (!shape) return "";
   const hs = HANDLE_SIZE / 2 + 2;
+  const rect_handle_map = {
+    0: "nw", // Top Left
+    1: "n", // Top Center
+    2: "ne", // Top Right
+    3: "w", // Middle Left
+    4: "e", // Middle Right
+    5: "sw", // Bottom Left
+    6: "s", // Bottom Center
+    7: "se", // Bottom Right
+  };
+  const circle_handle_map = {
+    0: "n", // Top
+    1: "e", // Right
+    2: "s", // Bottom
+    3: "w", // Left
+  };
   if (shape.cmd === "rect") {
     const pts = getHandlePointsRect(+shape.x, +shape.y, +shape.w, +shape.h);
     for (let i = 0; i < pts.length; i++) {
       if (Math.abs(x - pts[i][0]) <= hs && Math.abs(y - pts[i][1]) <= hs)
-        return i;
+        return rect_handle_map[i];
     }
   } else if (shape.cmd === "circle") {
     const pts = getHandlePointsCircle(+shape.x, +shape.y, +shape.r);
     for (let i = 0; i < pts.length; i++) {
       if (Math.abs(x - pts[i][0]) <= hs && Math.abs(y - pts[i][1]) <= hs)
-        return i;
+        return circle_handle_map[i];
     }
   } else if (shape.cmd === "text") {
     // NOTE : le y du texte correspond à la ligne de base (bas du texte)
@@ -342,10 +359,10 @@ function hitHandle(x, y, shape) {
     const pts = getHandlePointsRect(+shape.x, +shape.y - h, w, h);
     for (let i = 0; i < pts.length; i++) {
       if (Math.abs(x - pts[i][0]) <= hs && Math.abs(y - pts[i][1]) <= hs)
-        return i;
+        return rect_handle_map[i];
     }
   }
-  return -1;
+  return "";
 }
 
 // ==================================================
@@ -353,8 +370,8 @@ function hitHandle(x, y, shape) {
 // ==================================================
 
 // Calcule les nouvelles propriétés d'une forme en fonction du déplacement d'une poignée de redimensionnement. Applique les règles de redimensionnement spécifiques à chaque type de forme (rectangle, cercle, texte) et impose une taille minimale pour éviter que la forme ne s'inverse ou ne disparaisse.
-// Paramètres : TODO
-// Retourne : TODO
+// Paramètres : cmd (type de forme), handleIdx (poignée manipulée), dx/dy (déplacement), orig (forme d'origine)
+// Retourne : un objet partiel contenant les propriétés mises à jour (x/y/w/h/r/size)
 function applyHandleMove(cmd, handleIdx, dx, dy, orig) {
   if (cmd === "rect") {
     let { x, y, w, h } = orig;
@@ -364,37 +381,37 @@ function applyHandleMove(cmd, handleIdx, dx, dy, orig) {
     w = +w;
     h = +h;
     switch (handleIdx) {
-      case 0: // TL
+      case "nw": // TL
         x += dx;
         y += dy;
         w -= dx;
         h -= dy;
         break;
-      case 1: // TC
+      case "n": // TC
         y += dy;
         h -= dy;
         break;
-      case 2: // TR
+      case "ne": // TR
         y += dy;
         w += dx;
         h -= dy;
         break;
-      case 3: // ML
+      case "w": // ML
         x += dx;
         w -= dx;
         break;
-      case 4: // MR
+      case "e": // MR
         w += dx;
         break;
-      case 5: // BL
+      case "sw": // BL
         x += dx;
         w -= dx;
         h += dy;
         break;
-      case 6: // BC
+      case "s": // BC
         h += dy;
         break;
-      case 7: // BR
+      case "se": // BR
         w += dx;
         h += dy;
         break;
@@ -416,10 +433,24 @@ function applyHandleMove(cmd, handleIdx, dx, dy, orig) {
       h: Math.round(h),
     };
   } else if (cmd === "circle") {
-    const delta = [-dy, dx, dy, -dx][handleIdx] ?? 0;
+    let delta = 0;
+    switch (handleIdx) {
+      case "n": // Top
+        delta = -dy;
+        break;
+      case "e": // Right
+        delta = dx;
+        break;
+      case "s": // Bottom
+        delta = dy;
+        break;
+      case "w": // Left
+        delta = -dx;
+        break;
+    }
     return { r: Math.max(5, Math.round(+orig.r + delta)) };
   } else if (cmd === "text") {
-    // Pour le texte, on empêche la modification de taille par les côtés (TODO : faire en sorte que les handles de côtés modifient la taille aussi)
+    // Pour le texte, la modification de taille via les poignées latérales n'est pas prise en charge.
     let { x, y, w, h } = orig;
     x = +x;
     y = +y;
@@ -428,34 +459,34 @@ function applyHandleMove(cmd, handleIdx, dx, dy, orig) {
     // NOTE : le y du texte correspond à la ligne de base (bas du texte)
     y -= h; // On convertit le y de la ligne de base au y du coin supérieur pour réutiliser la même logique que pour les rectangles.
     switch (handleIdx) {
-      case 0: // TL
+      case "nw": // TL
         x += dx;
         y += dy;
         w -= dx;
         h -= dy;
         break;
-      case 1: // TC
+      case "n": // TC
         y += dy;
         h -= dy;
         break;
-      case 2: // TR
+      case "ne": // TR
         y += dy;
         w += dx;
         h -= dy;
         break;
-      case 3: // ML
+      case "w": // ML
         break;
-      case 4: // MR
+      case "e": // MR
         break;
-      case 5: // BL
+      case "sw": // BL
         x += dx;
         w -= dx;
         h += dy;
         break;
-      case 6: // BC
+      case "s": // BC
         h += dy;
         break;
-      case 7: // BR
+      case "se": // BR
         w += dx;
         h += dy;
         break;
@@ -486,10 +517,13 @@ function getPos(e) {
 // sinon vérifie si une forme est cliquée pour la sélectionner et entrer en mode "move".
 // Pour l'outil de texte, crée une nouvelle forme de texte à la position du clic et invite l'utilisateur à saisir le contenu du texte.
 canvas.addEventListener("mousedown", (e) => {
-  if (pendingState || lockedState.from_other) return; // On ignore les clics de souris tant qu'on attend la confirmation du serveur pour éviter les conflits d'état.
+  if (pendingState || scState.from_other) return; // On ignore les clics de souris tant qu'on attend la confirmation du serveur pour éviter les conflits d'état.
 
-  lock_others();
+  ask_for_sc();
+  scState.fun_to_call = processMouseDown.bind(null, e);
+});
 
+function processMouseDown(e) {
   const { x, y } = getPos(e);
   isMouseDown = true;
   mouseStart = { x, y };
@@ -500,7 +534,7 @@ canvas.addEventListener("mousedown", (e) => {
     const sel = shapes[selectedId];
     if (sel) {
       const h = hitHandle(x, y, sel);
-      if (h !== -1) {
+      if (h !== "") {
         // Clic sur une poignée de redimensionnement — calcul manuel de la boîte englobante pour les formes de texte
         let origExtra = {};
         if (sel.cmd === "text") {
@@ -553,18 +587,26 @@ canvas.addEventListener("mousedown", (e) => {
         color: currentColor(),
       };
       operation = encode(s);
-      sendOut(operation);
+      sendOutOpe(operation);
       pendingState = { op: operation, previewShape: s, selected: false };
       redraw();
     }
   } else {
     drawState = { type: tool, startX: x, startY: y, previewShape: null };
   }
-});
+}
 
 // Met à jour le style du curseur en fonction de l'outil sélectionné
 // et de la position de la souris par rapport aux formes sur le canvas.
 function updateCursorStyle(x, y) {
+  if (x === undefined || y === undefined) {
+    x = lastMousePos.x;
+    y = lastMousePos.y;
+  }
+  if (pendingState?.op || scState.from_other) {
+    canvas.style.cursor = "wait";
+    return;
+  }
   if (tool !== "select") {
     canvas.style.cursor = "crosshair";
     return;
@@ -572,18 +614,8 @@ function updateCursorStyle(x, y) {
   const sel = shapes[selectedId];
   if (sel) {
     const h = hitHandle(x, y, sel);
-    if (h !== -1) {
-      const cursors = [
-        "nw-resize",
-        "n-resize",
-        "ne-resize",
-        "w-resize",
-        "e-resize",
-        "sw-resize",
-        "s-resize",
-        "se-resize",
-      ];
-      canvas.style.cursor = cursors[h] ?? "pointer";
+    if (h !== "") {
+      canvas.style.cursor = h + "-resize" ?? "pointer";
       return;
     }
   }
@@ -595,7 +627,7 @@ function updateCursorStyle(x, y) {
 // et effectuer les actions appropriées en fonction de l'état actuel de l'interaction
 // (par exemple, déplacer une forme, redimensionner une forme, ou mettre à jour le style du curseur).
 canvas.addEventListener("mousemove", (e) => {
-  if (pendingState || lockedState.from_other) return; // On ignore les mouvements de souris tant qu'on attend la confirmation du serveur pour éviter les conflits d'état.
+  if (pendingState || scState.from_other) return; // On ignore les mouvements de souris tant qu'on attend la confirmation du serveur pour éviter les conflits d'état.
   const { x, y } = getPos(e);
   lastMousePos = { x, y };
 
@@ -660,7 +692,7 @@ canvas.addEventListener("mousemove", (e) => {
 // (par exemple, terminer le déplacement ou le redimensionnement d'une forme, ou créer une nouvelle forme à partir du dessin en cours).
 // Envoie les mises à jour nécessaires au serveur et réinitialise les états d'interaction.
 canvas.addEventListener("mouseup", (e) => {
-  if (pendingState || lockedState.from_other) return; // On ignore les clics de souris tant qu'on attend la confirmation du serveur pour éviter les conflits d'état.
+  if (pendingState || scState.from_other) return; // On ignore les clics de souris tant qu'on attend la confirmation du serveur pour éviter les conflits d'état.
 
   const { x, y } = getPos(e);
 
@@ -678,7 +710,7 @@ canvas.addEventListener("mouseup", (e) => {
     }
     if (Object.keys(diff).length > 0) {
       operation = encode({ op: "update", id: s.id, ...diff });
-      sendOut(operation);
+      sendOutOpe(operation);
       pendingState = { op: operation, previewShape: s, selected: true };
     }
     dragState = null;
@@ -704,7 +736,7 @@ canvas.addEventListener("mouseup", (e) => {
       };
 
       operation = encode(s);
-      sendOut(operation);
+      sendOutOpe(operation);
       pendingState = { op: operation, previewShape: ps, selected: false };
     } else {
       addToLog("Shape too small, ignoring");
@@ -712,6 +744,7 @@ canvas.addEventListener("mouseup", (e) => {
   }
 
   isMouseDown = false;
+  end_sc();
   drawState = null;
   redraw();
 });
@@ -721,8 +754,8 @@ canvas.addEventListener("mouseup", (e) => {
 // =========================================
 
 // Met à jour l'id de la forme sélectionnée puis rafraîchit le panneau de propriétés et redessine le canvas pour refléter la sélection.
-// Paramètres : TODO
-// Retourne : TODO
+// Paramètres : id (identifiant de la forme à sélectionner, ou null pour désélectionner)
+// Retourne : aucun
 function selectShape(id) {
   selectedId = id;
   updatePropsPanel();
@@ -733,8 +766,8 @@ function selectShape(id) {
 // Affiche les propriétés pertinentes pour le type de forme sélectionné (rectangle, cercle, texte)
 // et remplit les champs avec les valeurs actuelles de la forme.
 // Si aucune forme n'est sélectionnée, affiche un message indiquant qu'aucune sélection n'est active.
-// Paramètres : TODO
-// Retourne : TODO
+// Paramètres : aucun
+// Retourne : aucun
 function updatePropsPanel() {
   const s = shapes[selectedId];
   document.getElementById("no-selection").style.display = s ? "none" : "block";
@@ -774,8 +807,8 @@ function updatePropsPanel() {
 // et retourne une chaîne de caractères représentant la couleur au format hexadécimal (#RRGGBB).
 // Si la couleur est déjà au format hexadécimal, elle est retournée telle quelle.
 // Si la couleur est invalide ou non définie, une couleur par défaut est retournée.
-// Paramètres : TODO
-// Retourne : TODO
+// Paramètres : c (valeur CSS de couleur à convertir)
+// Retourne : une chaîne hexadécimale (#RRGGBB)
 function cssToHex(c) {
   // Si la couleur est undefined ou null, on retourne une couleur par défaut (bleu clair dans ce cas).
   if (!c) return "#4488ff";
@@ -802,12 +835,17 @@ function cssToHex(c) {
 // Paramètres :
 //  - key (la clé de la propriété modifiée),
 //  - val (la nouvelle valeur de la propriété)
-// Retourne : TODO
+// Retourne : aucun
 function propChanged(key, val) {
   if (!selectedId || !shapes[selectedId]) return;
-  if (pendingState || lockedState.from_other) return; // On ignore les changements de propriétés tant qu'on attend la confirmation du serveur pour éviter les conflits d'état.
+  if (pendingState || scState.from_other) return; // On ignore les changements de propriétés tant qu'on attend la confirmation du serveur pour éviter les conflits d'état.
+  ask_for_sc();
+  scState.fun_to_call = processPropChanged.bind(null, key, val);
+}
+
+function processPropChanged(key, val) {
   operation = encode({ op: "update", id: selectedId, [key]: val });
-  sendOut(operation);
+  sendOutOpe(operation);
   ps = { ...shapes[selectedId], [key]: val };
   pendingState = {
     op: operation,
@@ -883,12 +921,10 @@ document.querySelectorAll(".tool-btn[data-tool]").forEach((btn) => {
 // Gère la suppression de la forme sélectionnée en envoyant une opération de suppression au serveur,
 // en supprimant la forme du tableau local et en désélectionnant la forme.
 // Paramètres : aucun
-// Retourne : TODO
+// Retourne : aucun
 function deleteSelected() {
-  if (pendingState || lockedState.from_other) return;
-  if (!selectedId) return;
   operation = encode({ op: "delete", id: selectedId });
-  sendOut(operation);
+  sendOutOpe(operation);
   pendingState = {
     op: operation,
     previewShape: shapes[selectedId],
@@ -897,19 +933,29 @@ function deleteSelected() {
   redraw();
 }
 
-document.getElementById("delete-btn").addEventListener("click", deleteSelected);
-document.getElementById("clear-btn").addEventListener("click", () => {
-  if (pendingState || lockedState.from_other) return;
+function clearBoard() {
   selectShape(null);
   operation = encode({ op: "clear" });
-  sendOut(operation);
+  sendOutOpe(operation);
   pendingState = { op: operation, previewShape: null, selected: false };
   redraw();
+}
+
+document.getElementById("delete-btn").addEventListener("click", () => {
+  if (pendingState || scState.from_other) return;
+  if (!selectedId) return;
+  ask_for_sc();
+  scState.fun_to_call = deleteSelected;
+});
+document.getElementById("clear-btn").addEventListener("click", () => {
+  if (pendingState || scState.from_other) return;
+  ask_for_sc();
+  scState.fun_to_call = clearBoard;
 });
 
 // Gère les raccourcis clavier pour les outils de dessin, la sélection, la suppression et l'échappement.
 window.addEventListener("keydown", (e) => {
-  if (pendingState || lockedState.from_other) return;
+  if (pendingState || scState.from_other) return;
   if (e.target.tagName === "INPUT") return;
   const map = {
     v: "select",
@@ -923,9 +969,14 @@ window.addEventListener("keydown", (e) => {
   };
   if (map[e.key]) {
     document.querySelector(`[data-tool="${map[e.key]}"]`).click();
-    updateCursorStyle(lastMousePos.x, lastMousePos.y);
+    updateCursorStyle();
   }
-  if (e.key === "Delete" || e.key === "Backspace") deleteSelected();
+  if (e.key === "Delete" || e.key === "Backspace") {
+    if (pendingState || scState.from_other) return;
+    if (!selectedId) return;
+    ask_for_sc();
+    scState.fun_to_call = deleteSelected;
+  }
   if (e.key === "Escape") selectShape(null);
 });
 
@@ -951,15 +1002,17 @@ document.getElementById("connecter").onclick = function (evt) {
 
   ws = new WebSocket("ws://" + host + ":" + port + "/ws");
   ws.onopen = function (evt) {
-    lockedState = { from_other: false, from_self: false };
+    scState = { from_other: false, from_self: false };
     addToLog("[INFO] Websocket ouverte");
     document.title = "🌐 " + port;
+    redraw();
+    updateCursorStyle();
   };
 
   ws.onclose = function (evt) {
     shapes = {};
     pendingState = null;
-    lockedState = { from_other: true, from_self: false };
+    scState = { from_other: true, from_self: false };
     redraw();
     addToLog("[INFO] Websocket fermée");
     ws = null;
@@ -991,21 +1044,54 @@ document.getElementById("fermer").onclick = function (evt) {
 // puis en appelant la fonction appropriée pour appliquer les changements
 // au white board en fonction du type de message (par exemple, mise à jour des données).
 // Paramètres : msg (une chaîne de caractères représentant le message reçu du serveur, encodé selon le protocole défini)
-// Retourne : TODO
+// Retourne : aucun
 function handleReceive(msg) {
-  var [prefix, ope] = msg.split(MSG_KEY_VALUE_SEP);
+  var [prefix, value] = msg.split(MSG_KEY_VALUE_SEP);
   switch (prefix) {
     case "data": {
-      applyMsg(ope);
+      scState.from_other = false;
+      applyMsg(value);
+      break;
+    }
+    case "section_critique": {
+      switch (value) {
+        case "debut_sc":
+          scState.from_self = true;
+          // addToLog("[INFO] debut sc");
+          scState.fun_to_call?.();
+          scState.fun_to_call = null;
+          break;
+        case "fin_sc":
+          if (scState.from_self) {
+            scState.from_self = false;
+            // addToLog("[INFO] fin sc");
+          } else {
+            addToLog(
+              "[WARN] I got fin_sc but I wasn't in a critical section, this is unexpected.",
+            );
+          }
+          break;
+        case "other":
+          scState.from_other = true;
+          addToLog("[INFO] Another user is performing an action...");
+          redraw();
+          break;
+      }
+      break;
     }
   }
+  updateCursorStyle();
 }
 
 // Applique une opération reçue du serveur en mettant à jour les données du white board en conséquence. Gère les différentes opérations possibles (création, mise à jour, suppression de formes, effacement total) et met à jour la sélection si nécessaire.
 // Paramètres : ope (une chaîne de caractères représentant l'opération reçue du serveur, encodée selon le protocole défini)
-// Retourne : TODO
+// Retourne : aucun
 function applyMsg(ope) {
   const d = decode(ope);
+  if (d === "") {
+    redraw();
+    return;
+  }
 
   if (pendingState && pendingState.op !== ope) {
     // L'opération reçue ne correspond pas à celle en attente, ce n'est pas censé avoir lieu.
@@ -1016,12 +1102,6 @@ function applyMsg(ope) {
         pendingState.op,
     );
   }
-
-  if (d.op === "lock" && !lockedState.from_self) {
-    lockedState.from_other = true;
-    addToLog("[INFO] Locked by another user");
-  } else if (d.op !== "lock")
-    lockedState = { from_other: false, from_self: false }; // On considère que toute opération reçue du serveur signifie que le verrouillage par un autre utilisateur est levé, sauf si l'opération reçue est elle-même une opération de verrouillage ("lock"), auquel cas on maintient l'état de verrouillage.
 
   if (d.op === "delete") {
     delete shapes[d.id];
@@ -1065,27 +1145,50 @@ function applyMsg(ope) {
 
 // Envoie une opération déjà encodée au serveur via la WebSocket, après avoir vérifié que la connexion est établie. Affiche l'opération dans les logs avec le préfixe "[OUT]".
 // Paramètres : operation (une chaîne de caractères représentant l'opération à envoyer, déjà encodée selon le protocole défini)
-// Retourne : TODO
-async function sendOut(operation) {
+// Retourne : une promesse résolue avec false (et n'envoie rien si la connexion n'est pas disponible)
+async function sendOutOpe(operation) {
+  if (scState.from_other) {
+    addToLog(
+      "[WARN] Cannot perform action while another user is performing an action.",
+    );
+    return false;
+  }
   if (!ws) {
     return false;
   }
 
   addToLog("[OUT] " + operation);
+  updateCursorStyle();
 
-  await updateRemote(operation);
+  await sendWs({ section_critique: "deactivate", data: operation });
 
   return false;
 }
 
-function lock_others() {
-  sendOut(encode({ op: "lock" }));
-  lockedState.from_self = true;
+function ask_for_sc() {
+  sendWs({ section_critique: "activate" });
 }
 
-const updateRemote = async (newOperation) => {
-  ws.send("data" + MSG_KEY_VALUE_SEP + newOperation);
-};
+// Envoie un message au serveur pour indiquer la fin d'une section critique, permettant ainsi à d'autres utilisateurs de commencer leurs actions. Utilisée lorsqu'aucune action n'a été effectuée après l'activation de la section critique.
+function end_sc() {
+  sendWs({ section_critique: "deactivate", data: "" });
+}
+
+function sendWs(obj) {
+  if (!ws) {
+    return false;
+  }
+  let msg = "";
+  for (const [k, v] of Object.entries(obj)) {
+    msg +=
+      MSG_ENTRY_SEP +
+      MSG_KEY_VALUE_SEP +
+      k.toString() +
+      MSG_KEY_VALUE_SEP +
+      obj[k].toString();
+  }
+  ws.send(msg);
+}
 
 // ==================================================
 // LOGS
@@ -1127,7 +1230,7 @@ function addToLog(message) {
 document.getElementById("snapshot").onclick = function (evt) {
   if (ws) {
     addToLog("[OUT] SNAPSHOT");
-    ws.send("snapshot" + MSG_KEY_VALUE_SEP + "true");
+    sendWs({ snapshot: "true" });
     return;
   }
   addToLog("SNAPSHOT IMPOSSIBLE : ws close");

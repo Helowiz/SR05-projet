@@ -78,25 +78,37 @@ func do_webserver(w http.ResponseWriter, r *http.Request) {
 /* Gere un message de la websocket */
 func handle_ws_msg(message string) {
 	//fmt.Println("réception : " + string(message))
-	parts := strings.Split(message, "=")
-	prefix, suffix := parts[0], strings.TrimSpace(parts[1])
+	display.Info("", "handle_ws_msg", "received : "+string(message))
+	entries := strings.Split(message, "/")[1:] // split par / et ignore la première entrée vide
+	prefix, suffix := protocol.ParseEntry(entries[0], "handle_ws_msg")
 	display.Info("", "handle_ws_msg", "received : "+string(message))
 
 	switch prefix {
 	case "init":
 		ws_send("data=" + lastOpe)
 
-	case "section_critique": // juste pour le debug, TODO - a enlever ce cas apres
+	case "section_critique":
 		if suffix == "activate" {
 			demander_sc()
 		}
 		if suffix == "deactivate" {
-			liberer_sc("0")
+			if len(entries) < 2 {
+				display.Warning("", "handle_ws_msg", "Message pour libération section critique mal formaté : "+message)
+				return
+			}
+			prefix, suffix = protocol.ParseEntry(entries[1], "handle_ws_msg")
+			if prefix != "data" {
+				display.Warning("", "handle_ws_msg", "Message pour libération section critique mal formaté : "+message)
+				return
+			}
+			liberer_sc(suffix)
 		}
 	case "data":
-		pendingOpe = suffix // en attente
-		demander_sc()
-		//wait_for_sc(active)
+		if suffix != "" {
+			pendingOpe = suffix // en attente
+			demander_sc()
+			//wait_for_sc(active)
+		}
 
 	case "snapshot":
 		initiate = true
@@ -116,7 +128,7 @@ func do_websocket(w http.ResponseWriter, r *http.Request, eventQueue chan<- Even
 
 		return
 	}
-	eventQueue <- Event{from: WEBSOCKET, content: "init="}
+	eventQueue <- Event{from: WEBSOCKET, content: "/=init="}
 
 	for {
 		_, message, err := cnx.ReadMessage()
@@ -149,25 +161,22 @@ func handle_ctl_msg(msg string, active chan bool) {
 	msg_val := protocol.Findval(msg, "value", "server")
 	switch msg_type {
 	case "section_critique": // message sur la section critique
-		if msg_val == "true" {
+		switch msg_val {
+		case "true":
 			in_section_critique = true
-			ws_send("info=debut section critique")
-			//active <- true
-			if pendingOpe != "" { //si j'ai la section critique
-				if pendingOpe != "lock" {
-					//modify_data(pendingOpe, active)
-					liberer_sc(pendingOpe) // je la libère
-				}
-				pendingOpe = ""
-			}
-		} else {
+			ws_send("section_critique=debut_sc")
+		case "false":
 			in_section_critique = false
-			ws_send("info=fin section critique")
+			ws_send("section_critique=fin_sc")
+		case "other":
+			ws_send("section_critique=other")
 		}
 	case "data": // message sur l'update des données
 		lastOpe = msg_val
-		ws_send("data=" + msg_val) // update les données dans le whiteboard
-		modify_data(msg_val, active)
+		ws_send("data=" + msg_val)
+		if msg_val != "" {
+			modify_data(msg_val, active) // update les données dans le whiteboard
+		}
 
 	case "snapshot_app":
 		doLocalSnapshot()
