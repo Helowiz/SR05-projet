@@ -599,6 +599,14 @@ function processMouseDown(e) {
 // Met à jour le style du curseur en fonction de l'outil sélectionné
 // et de la position de la souris par rapport aux formes sur le canvas.
 function updateCursorStyle(x, y) {
+  if (x === undefined || y === undefined) {
+    x = lastMousePos.x;
+    y = lastMousePos.y;
+  }
+  if (pendingState?.op || scState.from_other) {
+    canvas.style.cursor = "wait";
+    return;
+  }
   if (tool !== "select") {
     canvas.style.cursor = "crosshair";
     return;
@@ -961,7 +969,7 @@ window.addEventListener("keydown", (e) => {
   };
   if (map[e.key]) {
     document.querySelector(`[data-tool="${map[e.key]}"]`).click();
-    updateCursorStyle(lastMousePos.x, lastMousePos.y);
+    updateCursorStyle();
   }
   if (e.key === "Delete" || e.key === "Backspace") {
     ask_for_sc();
@@ -996,6 +1004,7 @@ document.getElementById("connecter").onclick = function (evt) {
     addToLog("[INFO] Websocket ouverte");
     document.title = "🌐 " + port;
     redraw();
+    updateCursorStyle();
   };
 
   ws.onclose = function (evt) {
@@ -1069,6 +1078,7 @@ function handleReceive(msg) {
       break;
     }
   }
+  updateCursorStyle();
 }
 
 // Applique une opération reçue du serveur en mettant à jour les données du white board en conséquence. Gère les différentes opérations possibles (création, mise à jour, suppression de formes, effacement total) et met à jour la sélection si nécessaire.
@@ -1146,6 +1156,7 @@ async function sendOutOpe(operation) {
   }
 
   addToLog("[OUT] " + operation);
+  updateCursorStyle();
 
   await sendWs({ section_critique: "deactivate", data: operation });
 
