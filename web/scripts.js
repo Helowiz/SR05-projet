@@ -923,8 +923,6 @@ document.querySelectorAll(".tool-btn[data-tool]").forEach((btn) => {
 // Paramètres : aucun
 // Retourne : aucun
 function deleteSelected() {
-  if (pendingState || scState.from_other) return;
-  if (!selectedId) return;
   operation = encode({ op: "delete", id: selectedId });
   sendOutOpe(operation);
   pendingState = {
@@ -944,6 +942,8 @@ function clearBoard() {
 }
 
 document.getElementById("delete-btn").addEventListener("click", () => {
+  if (pendingState || scState.from_other) return;
+  if (!selectedId) return;
   ask_for_sc();
   scState.fun_to_call = deleteSelected;
 });
@@ -972,6 +972,8 @@ window.addEventListener("keydown", (e) => {
     updateCursorStyle();
   }
   if (e.key === "Delete" || e.key === "Backspace") {
+    if (pendingState || scState.from_other) return;
+    if (!selectedId) return;
     ask_for_sc();
     scState.fun_to_call = deleteSelected;
   }
