@@ -317,23 +317,39 @@ function hitTest(x, y) {
   return null;
 }
 
-// Effectue un test de collision pour déterminer si les coordonnées (x, y) se trouvent à proximité d'une poignée de redimensionnement d'une forme donnée. Retourne l'indice de la poignée touchée (0 à 7 pour un rectangle, 0 à 3 pour un cercle) ou -1 si aucune poignée n'est touchée.
+// Effectue un test de collision pour déterminer si les coordonnées (x, y) se trouvent à proximité d'une poignée de redimensionnement d'une forme donnée. Retourne l'identifiant de la poignée si une poignée est touchée, ou une chaine vide sinon.
 // Paramètres : TODO
 // Retourne : TODO
 function hitHandle(x, y, shape) {
-  if (!shape) return -1;
+  if (!shape) return "";
   const hs = HANDLE_SIZE / 2 + 2;
+  const rect_handle_map = {
+    0: "nw", // Top Left
+    1: "n", // Top Center
+    2: "ne", // Top Right
+    3: "w", // Middle Left
+    4: "e", // Middle Right
+    5: "sw", // Bottom Left
+    6: "s", // Bottom Center
+    7: "se", // Bottom Right
+  };
+  const circle_handle_map = {
+    0: "n", // Top
+    1: "e", // Right
+    2: "s", // Bottom
+    3: "w", // Left
+  };
   if (shape.cmd === "rect") {
     const pts = getHandlePointsRect(+shape.x, +shape.y, +shape.w, +shape.h);
     for (let i = 0; i < pts.length; i++) {
       if (Math.abs(x - pts[i][0]) <= hs && Math.abs(y - pts[i][1]) <= hs)
-        return i;
+        return rect_handle_map[i];
     }
   } else if (shape.cmd === "circle") {
     const pts = getHandlePointsCircle(+shape.x, +shape.y, +shape.r);
     for (let i = 0; i < pts.length; i++) {
       if (Math.abs(x - pts[i][0]) <= hs && Math.abs(y - pts[i][1]) <= hs)
-        return i;
+        return circle_handle_map[i];
     }
   } else if (shape.cmd === "text") {
     // NOTE : le y du texte correspond à la ligne de base (bas du texte)
@@ -343,10 +359,10 @@ function hitHandle(x, y, shape) {
     const pts = getHandlePointsRect(+shape.x, +shape.y - h, w, h);
     for (let i = 0; i < pts.length; i++) {
       if (Math.abs(x - pts[i][0]) <= hs && Math.abs(y - pts[i][1]) <= hs)
-        return i;
+        return rect_handle_map[i];
     }
   }
-  return -1;
+  return "";
 }
 
 // ==================================================
@@ -365,37 +381,37 @@ function applyHandleMove(cmd, handleIdx, dx, dy, orig) {
     w = +w;
     h = +h;
     switch (handleIdx) {
-      case 0: // TL
+      case "nw": // TL
         x += dx;
         y += dy;
         w -= dx;
         h -= dy;
         break;
-      case 1: // TC
+      case "n": // TC
         y += dy;
         h -= dy;
         break;
-      case 2: // TR
+      case "ne": // TR
         y += dy;
         w += dx;
         h -= dy;
         break;
-      case 3: // ML
+      case "w": // ML
         x += dx;
         w -= dx;
         break;
-      case 4: // MR
+      case "e": // MR
         w += dx;
         break;
-      case 5: // BL
+      case "sw": // BL
         x += dx;
         w -= dx;
         h += dy;
         break;
-      case 6: // BC
+      case "s": // BC
         h += dy;
         break;
-      case 7: // BR
+      case "se": // BR
         w += dx;
         h += dy;
         break;
@@ -417,7 +433,21 @@ function applyHandleMove(cmd, handleIdx, dx, dy, orig) {
       h: Math.round(h),
     };
   } else if (cmd === "circle") {
-    const delta = [-dy, dx, dy, -dx][handleIdx] ?? 0;
+    let delta = 0;
+    switch (handleIdx) {
+      case "n": // Top
+        delta = -dy;
+        break;
+      case "e": // Right
+        delta = dx;
+        break;
+      case "s": // Bottom
+        delta = dy;
+        break;
+      case "w": // Left
+        delta = -dx;
+        break;
+    }
     return { r: Math.max(5, Math.round(+orig.r + delta)) };
   } else if (cmd === "text") {
     // Pour le texte, on empêche la modification de taille par les côtés (TODO : faire en sorte que les handles de côtés modifient la taille aussi)
@@ -429,34 +459,34 @@ function applyHandleMove(cmd, handleIdx, dx, dy, orig) {
     // NOTE : le y du texte correspond à la ligne de base (bas du texte)
     y -= h; // On convertit le y de la ligne de base au y du coin supérieur pour réutiliser la même logique que pour les rectangles.
     switch (handleIdx) {
-      case 0: // TL
+      case "nw": // TL
         x += dx;
         y += dy;
         w -= dx;
         h -= dy;
         break;
-      case 1: // TC
+      case "n": // TC
         y += dy;
         h -= dy;
         break;
-      case 2: // TR
+      case "ne": // TR
         y += dy;
         w += dx;
         h -= dy;
         break;
-      case 3: // ML
+      case "w": // ML
         break;
-      case 4: // MR
+      case "e": // MR
         break;
-      case 5: // BL
+      case "sw": // BL
         x += dx;
         w -= dx;
         h += dy;
         break;
-      case 6: // BC
+      case "s": // BC
         h += dy;
         break;
-      case 7: // BR
+      case "se": // BR
         w += dx;
         h += dy;
         break;
@@ -504,7 +534,7 @@ function processMouseDown(e) {
     const sel = shapes[selectedId];
     if (sel) {
       const h = hitHandle(x, y, sel);
-      if (h !== -1) {
+      if (h !== "") {
         // Clic sur une poignée de redimensionnement — calcul manuel de la boîte englobante pour les formes de texte
         let origExtra = {};
         if (sel.cmd === "text") {
@@ -576,18 +606,8 @@ function updateCursorStyle(x, y) {
   const sel = shapes[selectedId];
   if (sel) {
     const h = hitHandle(x, y, sel);
-    if (h !== -1) {
-      const cursors = [
-        "nw-resize",
-        "n-resize",
-        "ne-resize",
-        "w-resize",
-        "e-resize",
-        "sw-resize",
-        "s-resize",
-        "se-resize",
-      ];
-      canvas.style.cursor = cursors[h] ?? "pointer";
+    if (h !== "") {
+      canvas.style.cursor = h + "-resize" ?? "pointer";
       return;
     }
   }
