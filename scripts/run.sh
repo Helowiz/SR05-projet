@@ -30,5 +30,5 @@ echo "Compilation réussie."
 
 echo "==> Démarrage de l'anneau..."
 
+#./run_with_another_site.sh ./bin/app ./bin/ctl wsl 172.26.153.23
 ./anneau_avc_app.sh ./bin/app ./bin/ctl
-#./remote_anneau.sh ./bin/app ./bin/ctl mac

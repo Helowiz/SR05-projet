@@ -2,12 +2,18 @@ package protocol
 
 import (
 	"SR05_projet/display"
+	"fmt"
 	"strconv"
 	"strings"
 )
 
 var fieldsep = "/"
 var keyvalsep = "="
+
+type Interval struct {
+	debut int
+	fin   int
+}
 
 func Msg_format(key string, val string) string {
 	return fieldsep + keyvalsep + key + keyvalsep + val
@@ -100,4 +106,86 @@ func ParseEntry(entry string, name string) (string, string) {
 		return "", ""
 	}
 	return kv[0], kv[1]
+}
+
+func decalerGauche(l []Interval, index int) []Interval {
+	for i := index; i < (len(l) - 1); i++ {
+		l[i] = l[i+1]
+	}
+	return l[:len(l)-1]
+}
+
+func decalerDroite(l []Interval, index int) []Interval {
+	l = append(l, l[len(l)-1]) // extension de 1
+	for i := len(l) - 2; i > index; i-- {
+		l[i] = l[i-1]
+
+	}
+	return l
+}
+
+/* Update la map des intervalles, retourne vrai le message est nouveau faux deja present */
+func UpdateInterval(interval_map map[int][]Interval, id_site int, num int) bool {
+
+	if _, ok := interval_map[id_site]; !ok { // 1er msg de ce site
+		interval_map[id_site] = make([]Interval, 0)
+		interval_map[id_site] = append(interval_map[id_site], Interval{num, num})
+		return true
+	}
+
+	for index, inter := range interval_map[id_site] {
+
+		if num >= inter.debut && num <= inter.fin { // dans un interval
+			return false
+		}
+
+		// extension a gauche
+		if inter.debut-1 == num {
+			interval_map[id_site][index] = Interval{inter.debut - 1, inter.fin}
+			return true
+
+		}
+
+		// extension a droite
+		if inter.fin+1 == num {
+			interval_map[id_site][index] = Interval{inter.debut, inter.fin + 1}
+
+			// merge avc prochain ?
+			if index+1 < len(interval_map[id_site]) {
+				newInterval, ok := mergeIntervals(interval_map[id_site][index], interval_map[id_site][index+1])
+				if ok { // merge reussi
+					interval_map[id_site][index] = newInterval
+					interval_map[id_site] = decalerGauche(interval_map[id_site], index+1)
+				}
+
+			}
+			return true
+		}
+
+		if num < inter.debut { // insertion entre deux intervalles
+			interval_map[id_site] = decalerDroite(interval_map[id_site], index)
+			interval_map[id_site][index] = Interval{num, num}
+			return true
+		}
+	}
+	// arrive en fin de liste
+	interval_map[id_site] = append(interval_map[id_site], Interval{num, num})
+	return true
+
+}
+
+/*
+	verifie si c'est possible de joindre deux intervalles et le fait si c'est possible
+
+args : deux intervales
+sortie : (intervale merged, true) si joignable, (intervalle nulle, false) sinon
+*/
+func mergeIntervals(a Interval, b Interval) (Interval, bool) {
+
+	if (a.debut < b.debut && a.fin < b.debut-1) || (a.debut > b.debut && a.debut-1 > b.fin) {
+		fmt.Printf("\"Not mergeable\": %v\n", "Not mergeable")
+		return Interval{0, 0}, false
+	} else {
+		return Interval{min(a.debut, b.debut), max(a.fin, b.fin)}, true
+	}
 }

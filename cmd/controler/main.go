@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 )
 
 type EltMapFile struct {
@@ -26,9 +27,11 @@ var h = 0            // horloge du site
 var this_id int      // id du site (passe en param)
 var proc_name string // nom du site (passe en param)
 var n_sites int      // nombre de sites (passe en param)
+var n_msg = 0        // num serie messages
 
-var messages_recus = make(map[Estampille]struct{}) // map juste pour verifier l'existence des messages
-var app_en_sc bool = false                         // indique si l'app est en section critique
+var intervalles_recus = make(map[int][]protocol.Interval) // check si on a deja recu
+
+var app_en_sc bool = false // indique si l'app est en section critique
 
 var map_file = make(map[int]EltMapFile) // map pour la file d'attente
 var horloge_vect = make(map[int]int)    // map pour l'horloge vectorielles
@@ -37,7 +40,7 @@ var horloge_vect = make(map[int]int)    // map pour l'horloge vectorielles
 const WHITE string = "blanc"
 const RED string = "rouge"
 
-// var stopSnapshot = false
+var stopSnapshot = false
 var sauvMsg []string
 
 var color = WHITE
@@ -190,7 +193,6 @@ func parse_ctl_message(msg string) {
 			globalState = snapshot.Merge(globalState, receiveSnapshot)
 			nbStateExpected--
 			nbMsgExpected = nbMsgExpected + receiveTotal
-			display.Info("", "STATE", "Etat attendu : "+strconv.Itoa(nbStateExpected)+" message attentu : "+strconv.Itoa(nbMsgExpected))
 			if nbStateExpected == 0 && nbMsgExpected == 0 {
 				endSnapshot()
 			}
@@ -262,7 +264,6 @@ func parse_app_msg(msg string) {
 		newData := protocol.Findval(msg, "data", proc_name)
 		app_fin_sc(newData)
 	case "snapshot_init":
-		display.Info(proc_name, "SNAPINIT", "début de snapshot")
 		color = RED
 		initiator = true
 		localStat, _ = snapshot.ToSnapshot(protocol.Findval(msg, "snap", proc_name))
@@ -278,14 +279,14 @@ func parse_app_msg(msg string) {
 	case "snapshot": // Snapshot reçu de l'APP
 		receiveSnapshot := protocol.Findval(msg, "snap", proc_name)
 		localStat, _ = snapshot.ToSnapshot(receiveSnapshot)
+
 		localStat.HorlogeVect = make(map[int]int)
 		for k, v := range horloge_vect {
 			localStat.HorlogeVect[k] = v
 		}
 		snapshotStr, _ := snapshot.ToString(localStat)
 
-		display.Envoie(proc_name, "SNAPAPP", proc_name+" a pris une snapshot : "+snapshotStr)
-		display.Info(proc_name, "", proc_name+"envoie la  snap à l'init")
+		display.Info(proc_name, "ROUGE", proc_name+" devient Rouge et prend une snapshot : "+snapshotStr)
 		msgToSend := "state" + protocol.Msg_format("global_state", snapshotStr) + protocol.Msg_format("total", strconv.Itoa(total))
 		envoyer_tous(msgToSend)
 
@@ -304,25 +305,29 @@ func parse_app_msg(msg string) {
 }
 
 func envoyer(msg string, id int) {
+	n_msg++
 	est := Estampille{this_id, h}
+
 	horloge_vect_str := protocol.VectToString(horloge_vect)
-	sendToCtl(protocol.Msg_format("target", strconv.Itoa(id)) + protocol.Msg_format("id", strconv.Itoa(est.id_site)) + protocol.Msg_format("hlg", strconv.Itoa(est.val_h)) + protocol.Msg_format("hlgvect", horloge_vect_str) + protocol.Msg_format("msg", msg) + protocol.Msg_format("color", color))
-	messages_recus[est] = struct{}{} // on ne veux pas traiter nos propres messages donc c'est comme si on l'avait deja recu
+	sendToCtl(protocol.Msg_format("n_msg", strconv.Itoa(n_msg)) + protocol.Msg_format("target", strconv.Itoa(id)) + protocol.Msg_format("id", strconv.Itoa(est.id_site)) + protocol.Msg_format("hlg", strconv.Itoa(est.val_h)) + protocol.Msg_format("hlgvect", horloge_vect_str) + protocol.Msg_format("msg", msg) + protocol.Msg_format("color", color))
 }
+
 func envoyer_tous(msg string) {
+	n_msg++
 	est := Estampille{this_id, h}
+
 	horloge_vect_str := protocol.VectToString(horloge_vect)
 	// id=id_site hlg=val_h msg=msg
-	sendToCtl(protocol.Msg_format("id", strconv.Itoa(est.id_site)) + protocol.Msg_format("hlg", strconv.Itoa(est.val_h)) + protocol.Msg_format("hlgvect", horloge_vect_str) + protocol.Msg_format("msg", msg) + protocol.Msg_format("color", color))
-	messages_recus[est] = struct{}{} // on ne veux pas traiter nos propres messages donc c'est comme si on l'avait deja recu
+	sendToCtl(protocol.Msg_format("n_msg", strconv.Itoa(n_msg)) + protocol.Msg_format("id", strconv.Itoa(est.id_site)) + protocol.Msg_format("hlg", strconv.Itoa(est.val_h)) + protocol.Msg_format("hlgvect", horloge_vect_str) + protocol.Msg_format("msg", msg) + protocol.Msg_format("color", color))
 }
 
 /* Envoi aux autres le signal de liberation avec les donnes a jour*/
 func envoyer_liberation(newData string) {
+	n_msg++
 	est := Estampille{this_id, h}
 	horloge_vect_str := protocol.VectToString(horloge_vect)
-	sendToCtl(protocol.Msg_format("id", strconv.Itoa(est.id_site)) + protocol.Msg_format("hlg", strconv.Itoa(est.val_h)) + protocol.Msg_format("hlgvect", horloge_vect_str) + protocol.Msg_format("msg", "liberation") + protocol.Msg_format("data", newData))
-	messages_recus[est] = struct{}{} // on ne veux pas traiter nos propres messages donc c'est comme si on l'avait deja recu
+	sendToCtl(protocol.Msg_format("n_msg", strconv.Itoa(n_msg)) + protocol.Msg_format("id", strconv.Itoa(est.id_site)) + protocol.Msg_format("hlg", strconv.Itoa(est.val_h)) + protocol.Msg_format("hlgvect", horloge_vect_str) + protocol.Msg_format("msg", "liberation") + protocol.Msg_format("data", newData))
+
 }
 
 /* Envoi un message a l'app (just stdout car l'app y est connectee) */
@@ -438,14 +443,25 @@ func handleMsg(msg string) {
 	// extraire l'estampille
 	est, err := estampille_from_msg(msg)
 	if err != nil {
-		display.Error(proc_name, "erreur", "Erreur estampille: "+err.Error())
+
+	}
+
+	// traite pas nos propre msg
+	if est.id_site == this_id {
 		return
 	}
 
-	if _, ok := messages_recus[est]; ok {
+	nmsg_recu_str := protocol.Findval(msg, "n_msg", proc_name)
+	nmsg_recu, err := strconv.Atoi(nmsg_recu_str)
+	if err != nil {
+		display.Error(proc_name, "erreur", "Erreur n_msg recu "+err.Error())
 		return
-	} // si le message a deje ete traite on fait rien
-	messages_recus[est] = struct{}{} // ajouter aux messages recus pour garder une trace
+	}
+
+	// check si deja recu, update intervalles au passage
+	if !protocol.UpdateInterval(intervalles_recus, est.id_site, nmsg_recu) {
+		return
+	}
 
 	if targetId == "" || targetId == strconv.Itoa(this_id) { // si le message est pour nous ou pour tous nous on le traite
 		if targetId == "" { // si le message est pour tous on le fait passer
@@ -476,9 +492,6 @@ func main() {
 	this_id = os.Getpid() // assigner notre pid a la variable global
 	n_sites = *p_nbsites  // nombre de sites
 
-	// on note le nombre de sites
-	n_sites = *p_nbsites
-
 	//initialisation de l'horloge vectorielle
 	horloge_vect[this_id] = 0
 
@@ -492,9 +505,7 @@ func main() {
 			display.Error(*p_nom, "erreur", "Lecture stdin terminée ou en erreur: "+err.Error())
 			//return
 		}
-
 		//display.Info(*p_nom, "main", "recu : "+rcvmsg)
-
 		if is_ctl_message(rcvmsg) { // reception d'un autre site
 
 			receiveColor := protocol.Findval(rcvmsg, "color", proc_name)

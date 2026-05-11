@@ -12,7 +12,7 @@ import (
 
 type Snapshot struct {
 	SiteID      int              `json:"site_id"`
-	HorlogeVect map[int]int      `json:"horloge_vect"` //TODO horloge vectorielle
+	HorlogeVect map[int]int      `json:"horloge_vect"`
 	Board       shape.WhiteBoard `json:"board"`
 }
 
