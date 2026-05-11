@@ -153,17 +153,16 @@ Chaque échange est structuré pour limiter les ambiguïtés de parsing et garan
 ## Fonctionnalités
 ### File d'attente répartie
 ### Sauvegarde d'état global via snapshots
-
 Nous avons implémenté l'algorithme d'instantané avec reconstitution de configuration vu en cours.
 Cela permet d'avoir une sauvegarde globale de notre système répartie. Nous sauvegardons chaque état de chaque site en plus des messages présents dans les canaux.
 
 Nous l'avons légèrement modifié, car nous gérons la synchronisation entre l'application et le contrôler d'un même site à l'aide d'un Buffer.
-De plus, nous avons développé le fait d'effectuer plusieurs snapshot.
+De plus, nous avons développé le fait d'effectuer plusieurs snapshots.
 
 ### Cohérence et synchronisation
 #### Estampilles (horloge logique) pour ordonner les requêtes
 #### Horloge vectorielle pour la cohérence causale
-implémentatin de l'horloge à travers un map[int]int. 
+Implémentation de l'horloge à travers un map[int]. 
 L'horloge est mise à jour à chaque message reçu par le controleur, puisque chaque site envoie sa propre horloge dans les messages. 
 Elle est aussi mise à jour à l'emplacement du site qui la possède à chaque action. 
 Elle sert pour tester la cohérence lors du snapshot, puisque chaque site n'est pas censé posséder une information plus avancée à propos d'un site dans son horloge que le site en question. 
