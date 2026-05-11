@@ -457,12 +457,13 @@ func main() {
 	// arguments en entree
 	p_nom := flag.String("n", "controler", "nom")
 	p_nbsites := flag.Int("nbsites", 1, "nombre de sites")
+	p_id := flag.Int("id", os.Getpid(), "id du site")
 	flag.Parse()
 
 	// init de l'identite du site
 	proc_name = *p_nom
-	this_id = os.Getpid() // assigner notre pid a la variable global
-	n_sites = *p_nbsites  // nombre de sites
+	this_id = *p_id      // assigner notre pid a la variable global
+	n_sites = *p_nbsites // nombre de sites
 
 	//initialisation de l'horloge vectorielle
 	horloge_vect[this_id] = 0
