@@ -1,28 +1,172 @@
 # SR05-projet
 
-## File d'attente répartie
+## Contexte
+Ce projet a été réalisé au semestre de printemps 2026 à l'Université de Technologie de Compiègne, dans le cadre de l'UV SR05 (Systèmes et Algorithmes Répartis), par :
+- LAUNAY Eloise
+- COMBLAT Maryne
+- ARTUS Caio
+- CHEVALERIAS Evan
 
-L'implémentation de la file d'attente répartie dans ce projet permet aux différents sites de modifier les données tout en s'assurant que les sites ont toujours la bonne version des données.
+## Sujet
+Le projet consiste à implémenter un tableau blanc collaboratif en temps réel. Plusieurs utilisateurs, répartis sur différents sites, peuvent dessiner simultanément sur un même canvas JavaScript partagé. L'application permet ainsi de travailler à plusieurs sur une même surface de dessin tout en conservant un état cohérent entre les participants.
 
-L'algorithme que nous avons implémenté suit celui du cours cependant avec quelques différences.
+L'objectif pédagogique est de mettre en œuvre :
+- la communication inter-processus,
+- la synchronisation distribuée,
+- la gestion de la concurrence,
+- la capture d'état global (snapshot).
 
-### Communication control a control
+## Architecture du projet
 
-Protocole de base avec /=cle=valeur
-un message de control contieng TOUJOURS un champ hlg, un champ id et un champ msg
-Si le message est a destinataire precis un champ target_id est egalement present
-Dans le cas de liberation, un champ data avec les nouvelles donnees est ajoute
+### Vue d'ensemble
+Un site est composé de trois briques principales :
+- un contrôleur Go,
+- une application Go (serveur web),
+- une interface HTML/CSS/JavaScript.
 
-### Communication control a app
-Utilise le même protocole mais que un message a la fois sous la forme 
-/=type=(type du message)/=valeur=(valeur du message)
+Rôles :
+- le contrôleur gère les messages distribués, la file d'attente répartie et la cohérence globale,
+- l'application maintient l'état local du tableau blanc et relaie les mises à jour vers l'interface,
+- l'interface permet les interactions utilisateur, notamment la création, le déplacement et le redimensionnement des formes.
 
-### Communication app a control
-Utilise le protocole de base mais avec
-/=type=(fromapp_debut_sc ou fromapp_fin_sc)
-et dans le cas de fromapp_fin_sc on a en plus le champ /data=(donnees a jour)
+Cette séparation rend le projet plus lisible et facilite le débogage : chaque responsabilité est isolée dans un composant dédié.
 
-### Communication app a interface et vice versa
-On utilise just des pairs cle=valeur dans la websocket
-c'est plus simple vu qu'on a pas a gerer autant de choses
-A voir si on change ça
+### Organisation des répertoires
+- `cmd/controler/main.go` : logique du contrôleur (section critique, messages, synchronisation)
+- `web/server.go` : serveur applicatif et WebSocket
+- `web/client.html`, `web/scripts.js`, `web/style.css` : interface utilisateur
+- `protocol/message.go` : format et parsing des messages
+- `shape/shape.go` : modèles de formes et opérations de dessin
+- `snapshot/snapshot.go` : structures et sauvegarde des snapshots
+- `display/display.go` : affichage de logs et traces
+- `scripts/*.sh` : scripts de lancement selon la topologie
+
+## Exécution
+
+### Prérequis
+- Go installé
+- Bash (Linux, macOS ou WSL)
+
+### Lancement standard
+Depuis le dossier `scripts` :
+
+```bash
+./run.sh
+```
+
+Le script :
+1. compile `app` et `ctl`,
+2. lance la topologie choisie (ligne de script décommentée dans `run.sh`).
+
+La topologie activée par défaut dans `run.sh` est `anneau.sh`.
+
+### Topologies réseau disponibles
+
+#### 1) `anneau.sh` (anneau unidirectionnel, 3 sites)
+Arcs de communication contrôleur vers contrôleur :
+- C1 -> C2
+- C2 -> C3
+- C3 -> C1
+
+Cette topologie forme une boucle simple : chaque site transmet les messages au suivant, ce qui permet de tester la propagation circulaire des requêtes.
+
+Schéma :
+
+```text
+    +-------> C2 ------> +
+    |                    |
+    |                    v
+    C1 <------- C3 <-----+
+```
+
+#### 2) `chaine.sh` (chaîne orientée, 3 sites)
+Arcs :
+- C1 -> C2
+- C2 -> C1
+- C2 -> C3
+- C3 -> C2
+
+Cette configuration représente une chaîne de sites consécutifs. Elle permet d'observer un comportement intermédiaire entre le réseau linéaire et le réseau complet.
+
+Schéma :
+
+```text
+C1 <------> C2 <------> C3
+```
+
+#### 3) `complet.sh` (graphe complet, 3 sites)
+Chaque contrôleur envoie aux deux autres.
+
+Le réseau complet maximise la connectivité entre les contrôleurs et sert à valider le fonctionnement du protocole lorsque tous les sites sont directement joignables.
+
+Schéma :
+
+```text
+     C1
+     ^ ^
+     /  \
+    v    v
+   C2 <-> C3
+
+(liens bidirectionnels entre toutes les paires)
+```
+
+#### 4) `quelconque.sh` (graphe orienté, 4 sites)
+Arcs :
+- C1 -> C2 et C3
+- C2 -> C4
+- C3 -> C2
+- C4 -> C1
+
+Cette topologie illustre un réseau plus asymétrique, utile pour tester des chemins de propagation non uniformes.
+
+Schéma :
+
+```text
+      +-------> C2 --------> C4
+      |          ^            |
+      |          |            |
+     C1 -------> C3           |
+      ^                       |
+      +-----------------------+
+```
+
+### Exécution sur plusieurs machines
+Le script `remote_anneau.sh` permet un lancement distribué sur plusieurs machines, selon une topologie en anneau.
+
+Points importants :
+- renseigner l'adresse IP distante dans `run.sh` à l'endroit prévu,
+- utiliser le rôle `mac` pour la machine macOS,
+- utiliser le rôle `wsl` pour les machines Linux/WSL,
+- prévoir une seule machine macOS dans ce scénario.
+
+## Architecture logicielle
+
+### Communication
+- Contrôleur <-> contrôleurs : messages horodatés (estampilles + horloge vectorielle)
+- Application <-> contrôleur : demandes et fin de section critique, puis diffusion des données
+- Interface <-> application : WebSocket pour les actions utilisateur et la synchronisation visuelle
+
+Chaque échange est structuré pour limiter les ambiguïtés de parsing et garantir un traitement cohérent des événements.
+
+
+## Fonctionnalités
+### File d'attente répartie
+### Sauvegarde d'état global via snapshots
+### Cohérence et synchronisation
+#### Estampilles (horloge logique) pour ordonner les requêtes
+#### Horloge vectorielle pour la cohérence causale
+
+### Interface graphique
+L'interface a été développée en HTML/CSS/JavaScript.
+
+Une première base a été générée avec l'aide de Claude (modèle Sonnet 4.6), puis adaptée et corrigée par l'équipe pour correspondre aux besoins du projet, notamment sur le redimensionnement et le déplacement des formes.
+
+L'interface a ensuite été nettoyée pour offrir une expérience plus lisible et plus stable, en particulier lors des modifications concurrentes.
+
+L'interface permet :
+- de se connecter à un port localhost,
+- de visualiser les logs importants,
+- d'afficher un état d'attente (fond rouge) lorsqu'une modification distante est en cours, ce qui bloque temporairement les interactions sur le canvas.
+
+Elle joue ainsi un rôle central dans l'observation du comportement distribué du système.
