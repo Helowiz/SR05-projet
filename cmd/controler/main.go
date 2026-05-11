@@ -50,9 +50,19 @@ var globalState *snapshot.GlobalSnapshot
 var nbStateExpected int
 var nbMsgExpected int
 
+var idCurrentSnap = 0
 var stopSnapshot = false
 
-//var totalaumomentdelasnapshot = 0
+/* Fonction utilitaire juste pour print la map file*/
+func map_file_to_string() string {
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("%-10s %-15s %-10s\n", "ID", "MSG_TYPE", "VAL_H"))
+	sb.WriteString(strings.Repeat("-", 35) + "\n")
+	for k, v := range map_file {
+		sb.WriteString(fmt.Sprintf("%-10d %-15s %-10d\n", k, v.msg_type, v.val_h))
+	}
+	return sb.String()
+}
 
 /* Check si j'ai la plus petite estampille et que j'ai bien tout les sites dans la map*/
 func smallest_estampille() bool {
@@ -92,6 +102,7 @@ func estampille_from_msg(msg string) (Estampille, error) {
 		return Estampille{0, 0}, errors.New("estampille malformée")
 	}
 	return Estampille{rcv_id, rcv_h}, nil
+
 }
 
 /*mets à jour l'horloge vectorielle à l'aide de celle reçue */
@@ -118,16 +129,22 @@ func parse_ctl_message(msg string) {
 
 	msg_content := protocol.Findval(msg, "msg", "")
 	receiveColor := protocol.Findval(msg, "color", color)
+	receiveSnapId, _ := strconv.Atoi(protocol.Findval(msg, "snap_id", proc_name))
 
 	// si le msg est bien un msg de l'app (et pas de la snapshot)
 	isAppMsg := msg_content == "requete" || msg_content == "accuse" || msg_content == "liberation"
 
+	if receiveColor == RED && color == WHITE { // signal pour prendre une snapshot
+		color = RED
+		stopSnapshot = true
+		sendToApp("snapshot_app", protocol.VectToString(horloge_vect))
+	}
+
 	if isAppMsg && receiveColor == WHITE && color == RED { // msg prepost
 		if initiator {
-			handlePrepostMsg(msg_content)
+			handlePrepostMsg(protocol.Findval(msg, "msg", proc_name))
 		} else {
-			display.Info(proc_name, "", "envoie d'un msg PREPOST"+msg_content)
-			msgToSend := "prepost" + protocol.Msg_format("value", msg_content)
+			msgToSend := "prepost" + protocol.Msg_format("value", protocol.Findval(msg, "msg", proc_name))
 			envoyer_tous(msgToSend)
 		}
 	}
@@ -146,35 +163,46 @@ func parse_ctl_message(msg string) {
 	}
 
 	switch msg_content {
+
 	case "requete":
 		total--
-		display.Recu(proc_name, "TOTAL", "RECU: requete TOTAL-- : total "+strconv.Itoa(total))
 		rec_dem_sc(est)
 
 	case "accuse":
 		total--
-		display.Recu(proc_name, "TOTAL", "RECU: accuse TOTAL-- : total "+strconv.Itoa(total))
 		rec_accuse_sc(est)
 
 	case "liberation":
 		// on update les donnes avec le champ data recu
 		//(un message de liberation devrai toujours avoir un champ data)
 		total--
-		display.Recu(proc_name, "TOTAL", "RECU: liberation TOTAL-- : total "+strconv.Itoa(total))
 		newData := protocol.Findval(msg, "data", proc_name)
 		rec_fin_sc(est)
 		sendToApp("data", newData)
 
-	case "state":
-		if initiator {
-			handleStateMsg(msg)
+	case "state": //global_state=blabla bilan=0
+		if initiator && receiveSnapId == idCurrentSnap {
+			receiveGlobalState := protocol.Findval(msg, "global_state", proc_name)
+			display.Info("STATE", "état", "état reçu")
+			receiveTotal, _ := strconv.Atoi(protocol.Findval(msg, "total", proc_name))
+			receiveSnapshot, _ := snapshot.ToSnapshot(receiveGlobalState)
+
+			globalState = snapshot.Merge(globalState, receiveSnapshot)
+			nbStateExpected--
+			nbMsgExpected = nbMsgExpected + receiveTotal
+			display.Info("", "STATE", "Etat attendu : "+strconv.Itoa(nbStateExpected)+" message attentu : "+strconv.Itoa(nbMsgExpected))
+			if nbStateExpected == 0 && nbMsgExpected == 0 {
+				endSnapshot()
+			}
 		}
 	case "prepost":
-		if initiator {
+		if initiator && receiveSnapId == idCurrentSnap {
 			handlePrepostMsg(msg)
 		}
 	case "reset_snapshot":
-		resetSnapshot()
+		if receiveSnapId == idCurrentSnap { // On ne reset que si c'est le bon snapshot
+			resetSnapshot()
+		}
 	case "reload_snapshot":
 		// demande la dernière global state
 		// envoie la global state à l'APP
@@ -185,8 +213,7 @@ func parse_ctl_message(msg string) {
 
 func endSnapshot() {
 	snapshot.SaveSnapshot(globalState)
-	// envoyer la globalState à tout le monde
-	envoyer_tous("reset_snapshot")
+	envoyer_tous("reset_snapshot" + protocol.Msg_format("snap_id", strconv.Itoa(idCurrentSnap)))
 	resetSnapshot()
 }
 
@@ -245,13 +272,12 @@ func parse_app_msg(msg string) {
 			localStat.HorlogeVect[k] = v
 		}
 		globalState = snapshot.Merge(nil, localStat)
-
+		idCurrentSnap++
 		nbStateExpected = n_sites - 1
 		nbMsgExpected = total
 	case "snapshot": // Snapshot reçu de l'APP
 		receiveSnapshot := protocol.Findval(msg, "snap", proc_name)
 		localStat, _ = snapshot.ToSnapshot(receiveSnapshot)
-
 		localStat.HorlogeVect = make(map[int]int)
 		for k, v := range horloge_vect {
 			localStat.HorlogeVect[k] = v
@@ -293,12 +319,9 @@ func envoyer_tous(msg string) {
 
 /* Envoi aux autres le signal de liberation avec les donnes a jour*/
 func envoyer_liberation(newData string) {
-	total += (n_sites - 1)
-
-	display.Recu(proc_name, "TOTAL", "ENVOIE: liberation TOTAL+=nsite-1: total "+strconv.Itoa(total))
 	est := Estampille{this_id, h}
 	horloge_vect_str := protocol.VectToString(horloge_vect)
-	sendToCtl(protocol.Msg_format("id", strconv.Itoa(est.id_site)) + protocol.Msg_format("hlg", strconv.Itoa(est.val_h)) + protocol.Msg_format("hlgvect", horloge_vect_str) + protocol.Msg_format("msg", "liberation") + protocol.Msg_format("data", newData) + protocol.Msg_format("color", color))
+	sendToCtl(protocol.Msg_format("id", strconv.Itoa(est.id_site)) + protocol.Msg_format("hlg", strconv.Itoa(est.val_h)) + protocol.Msg_format("hlgvect", horloge_vect_str) + protocol.Msg_format("msg", "liberation") + protocol.Msg_format("data", newData))
 	messages_recus[est] = struct{}{} // on ne veux pas traiter nos propres messages donc c'est comme si on l'avait deja recu
 }
 
@@ -344,8 +367,6 @@ func app_dem_sc() {
 	horloge_vect[this_id]++
 	map_file[this_id] = EltMapFile{"requete", h}
 	total += (n_sites - 1) // on envoie des messages à tous le monde sauf soi
-
-	display.Recu(proc_name, "TOTAL", "ENVOIE: liberation TOTAL+=nsite-1: total "+strconv.Itoa(total))
 	envoyer_tous("requete")
 }
 
@@ -354,6 +375,7 @@ func app_fin_sc(newData string) {
 	h++
 	horloge_vect[this_id]++
 	map_file[this_id] = EltMapFile{"liberation", h}
+	total += (n_sites - 1) // on envoie des messages à tous le monde sauf soi
 	envoyer_liberation(newData)
 	fin_sc_app(newData)
 }
@@ -365,8 +387,6 @@ func rec_dem_sc(est Estampille) {
 
 	map_file[est.id_site] = EltMapFile{"requete", est.val_h}
 	total++
-
-	display.Recu(proc_name, "TOTAL", "ENVOIE: accuse TOTAL++: total "+strconv.Itoa(total))
 	envoyer("accuse", est.id_site)
 
 	// verifier si l'arrivee de ce message nous permet de passer en SC
@@ -438,15 +458,10 @@ func handleMsg(msg string) {
 }
 
 func sendToCtl(msg string) {
+	if color == RED {
+		msg += protocol.Msg_format("snap_id", strconv.Itoa(idCurrentSnap))
+	}
 	fmt.Println(msg)
-}
-
-func takeAsnapshot(rcvmsg string) {
-	color = RED
-	stopSnapshot = true
-	display.Envoie(proc_name, "MAIN", proc_name+"devient ROUGE TOTAL "+strconv.Itoa(total))
-	sauvMsg = append(sauvMsg, rcvmsg)
-	sendToApp("snapshot_app", protocol.VectToString(horloge_vect))
 }
 
 func main() {
@@ -478,13 +493,18 @@ func main() {
 			//return
 		}
 
-		//display.Info(*p_nom, "main", "recu : "+rcvmsg+"TOTAL :"+strconv.Itoa(total))
+		//display.Info(*p_nom, "main", "recu : "+rcvmsg)
 
 		if is_ctl_message(rcvmsg) { // reception d'un autre site
 
-			receiveColor := protocol.Findval(rcvmsg, "color", color)
+			receiveColor := protocol.Findval(rcvmsg, "color", proc_name)
 			if receiveColor == RED && color == WHITE { // signal pour prendre une snapshot
-				takeAsnapshot(rcvmsg)
+				color = RED
+				stopSnapshot = true
+				sauvMsg = append(sauvMsg, rcvmsg)
+				idCurrentSnap, _ = strconv.Atoi(protocol.Findval(rcvmsg, "snap_id", ""))
+				display.Envoie(proc_name, "MAIN", proc_name+"devient ROUGE TOTAL "+strconv.Itoa(total))
+				sendToApp("snapshot_app", protocol.VectToString(horloge_vect))
 			}
 
 			if stopSnapshot {
