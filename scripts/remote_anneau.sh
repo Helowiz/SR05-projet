@@ -49,7 +49,7 @@ mkfifo "${FIFOS[@]}"
 if [ "$ROLE" == "mac" ]; then
     # --- MACBOOK ROLE (Site 3) ---
     $APP --port 4446 -id 3 < /tmp/in_A3 > /tmp/out_A3 &
-    $CTL -n C3 -nbsites 3 < /tmp/in_C3 > /tmp/out_C3 &
+    $CTL -n C3 -nbsites 3 -id 3 < /tmp/in_C3 > /tmp/out_C3 &
 
     cat /tmp/out_A3 > /tmp/in_C3 &
 
@@ -65,9 +65,9 @@ if [ "$ROLE" == "mac" ]; then
 elif [ "$ROLE" == "wsl" ]; then
     # --- WSL ROLE (Sites 1 & 2) ---
     $APP --port 4444 -id 1 < /tmp/in_A1 > /tmp/out_A1 &
-    $CTL -n C1 -nbsites 3 < /tmp/in_C1 > /tmp/out_C1 &
+    $CTL -n C1 -nbsites 3 -id 1 < /tmp/in_C1 > /tmp/out_C1 &
     $APP --port 4445 -id 2 < /tmp/in_A2 > /tmp/out_A2 &
-    $CTL -n C2 -nbsites 3 < /tmp/in_C2 > /tmp/out_C2 &
+    $CTL -n C2 -nbsites 3 -id 2 < /tmp/in_C2 > /tmp/out_C2 &
 
     # Site 1 Local Routing
     cat /tmp/out_A1 > /tmp/in_C1 &
