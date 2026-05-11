@@ -51,8 +51,7 @@ var globalState *snapshot.GlobalSnapshot
 var nbStateExpected int
 var nbMsgExpected int
 
-var totalEnvoyer = 0
-var totalRecu = 0
+var idCurrentSnap = 0
 
 /* Fonction utilitaire juste pour print la map file*/
 func map_file_to_string() string {
@@ -130,19 +129,18 @@ func parse_ctl_message(msg string) {
 
 	msg_content := protocol.Findval(msg, "msg", "")
 	receiveColor := protocol.Findval(msg, "color", color)
+	receiveSnapId, _ := strconv.Atoi(protocol.Findval(msg, "snap_id", proc_name))
 
 	// si le msg est bien un msg de l'app (et pas de la snapshot)
 	isAppMsg := msg_content == "requete" || msg_content == "accuse" || msg_content == "liberation"
 
-	if receiveColor == RED && color == WHITE { // signal pour prendre une snapshot
-		color = RED
-		stopSnapshot = true
-		sendToApp("snapshot_app", protocol.VectToString(horloge_vect))
-	}
-
 	if isAppMsg && receiveColor == WHITE && color == RED { // msg prepost
-		msgToSend := "prepost" + protocol.Msg_format("value", protocol.Findval(msg, "msg", proc_name))
-		envoyer_tous(msgToSend)
+		if initiator {
+			handlePrepostMsg(protocol.Findval(msg, "msg", proc_name))
+		} else {
+			msgToSend := "prepost" + protocol.Msg_format("value", protocol.Findval(msg, "msg", proc_name))
+			envoyer_tous(msgToSend)
+		}
 	}
 
 	if err != nil {
@@ -177,7 +175,7 @@ func parse_ctl_message(msg string) {
 		sendToApp("data", newData)
 
 	case "state": //global_state=blabla bilan=0
-		if initiator {
+		if initiator && receiveSnapId == idCurrentSnap {
 			receiveGlobalState := protocol.Findval(msg, "global_state", proc_name)
 			display.Info("STATE", "état", "état reçu")
 			receiveTotal, _ := strconv.Atoi(protocol.Findval(msg, "total", proc_name))
@@ -186,20 +184,19 @@ func parse_ctl_message(msg string) {
 			globalState = snapshot.Merge(globalState, receiveSnapshot)
 			nbStateExpected--
 			nbMsgExpected = nbMsgExpected + receiveTotal
+			display.Info("", "STATE", "Etat attendu : "+strconv.Itoa(nbStateExpected)+" message attentu : "+strconv.Itoa(nbMsgExpected))
 			if nbStateExpected == 0 && nbMsgExpected == 0 {
 				endSnapshot()
 			}
 		}
 	case "prepost":
-		if initiator {
-			nbMsgExpected--
-			globalState = snapshot.MergeMsg(globalState, msg)
-			if nbStateExpected == 0 && nbMsgExpected == 0 {
-				endSnapshot()
-			}
+		if initiator && receiveSnapId == idCurrentSnap {
+			handlePrepostMsg(msg)
 		}
 	case "reset_snapshot":
-		resetSnapshot()
+		if receiveSnapId == idCurrentSnap { // On ne reset que si c'est le bon snapshot
+			resetSnapshot()
+		}
 	default:
 		return
 	}
@@ -207,7 +204,7 @@ func parse_ctl_message(msg string) {
 
 func endSnapshot() {
 	snapshot.SaveSnapshot(globalState)
-	envoyer_tous("reset_snapshot")
+	envoyer_tous("reset_snapshot" + protocol.Msg_format("snap_id", strconv.Itoa(idCurrentSnap)))
 	resetSnapshot()
 }
 
@@ -218,6 +215,16 @@ func resetSnapshot() {
 	localStat = nil
 	globalState = nil
 	sauvMsg = nil
+}
+
+func handlePrepostMsg(msg string) {
+	nbMsgExpected--
+	globalState = snapshot.MergeMsg(globalState, msg)
+
+	display.Info("", "PREPOST", "Etat attendu : "+strconv.Itoa(nbStateExpected)+" message attentu : "+strconv.Itoa(nbMsgExpected))
+	if nbStateExpected == 0 && nbMsgExpected == 0 {
+		endSnapshot()
+	}
 }
 
 /* Traite un message recu de l'application de base */
@@ -240,13 +247,12 @@ func parse_app_msg(msg string) {
 			localStat.HorlogeVect[k] = v
 		}
 		globalState = snapshot.Merge(nil, localStat)
-
+		idCurrentSnap++
 		nbStateExpected = n_sites - 1
 		nbMsgExpected = total
 	case "snapshot": // Snapshot reçu de l'APP
 		receiveSnapshot := protocol.Findval(msg, "snap", proc_name)
 		localStat, _ = snapshot.ToSnapshot(receiveSnapshot)
-
 		localStat.HorlogeVect = make(map[int]int)
 		for k, v := range horloge_vect {
 			localStat.HorlogeVect[k] = v
@@ -422,6 +428,9 @@ func handleMsg(msg string) {
 }
 
 func sendToCtl(msg string) {
+	if color == RED {
+		msg += protocol.Msg_format("snap_id", strconv.Itoa(idCurrentSnap))
+	}
 	fmt.Println(msg)
 }
 
@@ -453,9 +462,21 @@ func main() {
 			display.Error(*p_nom, "erreur", "Lecture stdin terminée ou en erreur: "+err.Error())
 			//return
 		}
-		display.Info(*p_nom, "main", "recu : "+rcvmsg)
+
+		//display.Info(*p_nom, "main", "recu : "+rcvmsg)
 
 		if is_ctl_message(rcvmsg) { // reception d'un autre site
+
+			receiveColor := protocol.Findval(rcvmsg, "color", proc_name)
+			if receiveColor == RED && color == WHITE { // signal pour prendre une snapshot
+				color = RED
+				stopSnapshot = true
+				sauvMsg = append(sauvMsg, rcvmsg)
+				idCurrentSnap, _ = strconv.Atoi(protocol.Findval(rcvmsg, "snap_id", ""))
+				display.Envoie(proc_name, "MAIN", proc_name+"devient ROUGE TOTAL "+strconv.Itoa(total))
+				sendToApp("snapshot_app", protocol.VectToString(horloge_vect))
+			}
+
 			if stopSnapshot {
 				sauvMsg = append(sauvMsg, rcvmsg)
 			} else {
