@@ -54,7 +54,6 @@ var nbStateExpected int
 var nbMsgExpected int
 
 var idCurrentSnap = 0
-var stopSnapshot = false
 
 /* Fonction utilitaire juste pour print la map file*/
 func map_file_to_string() string {
@@ -145,9 +144,9 @@ func parse_ctl_message(msg string) {
 
 	if isAppMsg && receiveColor == WHITE && color == RED { // msg prepost
 		if initiator {
-			handlePrepostMsg(protocol.Findval(msg, "msg", proc_name))
+			handlePrepostMsg(msg)
 		} else {
-			msgToSend := "prepost" + protocol.Msg_format("value", protocol.Findval(msg, "msg", proc_name))
+			msgToSend := "prepost" + protocol.Msg_format("value", msg)
 			envoyer_tous(msgToSend)
 		}
 	}
@@ -215,7 +214,7 @@ func parse_ctl_message(msg string) {
 
 func endSnapshot() {
 	snapshot.SaveSnapshot(globalState)
-	envoyer_tous("reset_snapshot" + protocol.Msg_format("snap_id", strconv.Itoa(idCurrentSnap)))
+	envoyer_tous("reset_snapshot")
 	resetSnapshot()
 }
 
@@ -509,11 +508,12 @@ func main() {
 		if is_ctl_message(rcvmsg) { // reception d'un autre site
 
 			receiveColor := protocol.Findval(rcvmsg, "color", proc_name)
-			if receiveColor == RED && color == WHITE { // signal pour prendre une snapshot
+			receiveIdSnap, _ := strconv.Atoi(protocol.Findval(rcvmsg, "snap_id", ""))
+
+			if receiveIdSnap > idCurrentSnap && receiveColor == RED && color == WHITE { // signal pour prendre une snapshot
 				color = RED
 				stopSnapshot = true
-				sauvMsg = append(sauvMsg, rcvmsg)
-				idCurrentSnap, _ = strconv.Atoi(protocol.Findval(rcvmsg, "snap_id", ""))
+				idCurrentSnap = receiveIdSnap
 				display.Envoie(proc_name, "MAIN", proc_name+"devient ROUGE TOTAL "+strconv.Itoa(total))
 				sendToApp("snapshot_app", protocol.VectToString(horloge_vect))
 			}
