@@ -1235,3 +1235,12 @@ document.getElementById("snapshot").onclick = function (evt) {
   }
   addToLog("SNAPSHOT IMPOSSIBLE : ws close");
 };
+
+document.getElementById("reload_snapshot").onclick = function (evt) {
+  if (ws) {
+    addToLog("[OUT] RELOAD");
+    sendWs({ reload: "true" });
+    return;
+  }
+  addToLog("RELOAD IMPOSSIBLE : ws close");
+};
