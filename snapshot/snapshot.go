@@ -2,6 +2,7 @@ package snapshot
 
 import (
 	"SR05_projet/display"
+	"SR05_projet/protocol"
 	"SR05_projet/shape"
 	"encoding/json"
 	"fmt"
@@ -81,4 +82,31 @@ func Merge(globalSnapshot *GlobalSnapshot, receiveSnapshot *Snapshot) *GlobalSna
 func MergeMsg(global *GlobalSnapshot, msg string) *GlobalSnapshot {
 	global.MsgChannel = append(global.MsgChannel, msg)
 	return global
+}
+
+func GetHVMap(global GlobalSnapshot) map[int]map[int]int {
+	hv_map := make(map[int]map[int]int)
+	for _, snap := range global.States {
+		hv_map[snap.SiteID] = snap.HorlogeVect
+	}
+	return hv_map
+}
+
+// HVSnap c'est {A: {HVA}, B:{HVB}}
+func CheckCoherenceSnap(HVSnap map[int]map[int]int) bool {
+	for site_a, HVa := range HVSnap {
+		for site_b, HVb := range HVSnap {
+			if site_a == site_b { // c'est le même site
+				continue
+			}
+			h_b_dans_a := protocol.GetVal(HVa, site_b)
+			h_b_dans_b := protocol.GetVal(HVb, site_b)
+
+			if h_b_dans_a > h_b_dans_b { // le max des coupures doit correspondres au V_i[i]
+				display.Info("", "CheckCoherenceSnap", "Snapshot pas coherente")
+				return false
+			}
+		}
+	}
+	return true
 }

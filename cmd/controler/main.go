@@ -198,7 +198,12 @@ func parse_ctl_message(msg string) {
 }
 
 func endSnapshot() {
-	snapshot.SaveSnapshot(globalState)
+	hvmap := snapshot.GetHVMap(*globalState)
+	if snapshot.CheckCoherenceSnap(hvmap) {
+		snapshot.SaveSnapshot(globalState)
+	} else {
+		display.Error(proc_name, "endSnapshot", "Snapshot incohérente !")
+	}
 	envoyer_tous("reset_snapshot")
 	resetSnapshot()
 }
@@ -447,25 +452,6 @@ func sendToCtl(msg string) {
 	fmt.Println(msg)
 }
 
-// HVSnap c'est {A: {HVA}, B:{HVB}}
-func checkCoherenceSnap(HVSnap map[int]map[int]int) bool {
-	for site_a, HVa := range HVSnap {
-		for site_b, HVb := range HVSnap {
-			if site_a == site_b { // c'est le même site
-				continue
-			}
-			nb_msg_b_site_a := protocol.GetVal(HVa, site_b)
-			nb_msg_b_site_b := protocol.GetVal(HVb, site_b)
-
-			if nb_msg_b_site_a > nb_msg_b_site_b { // si A à reçu plus que B à envoyer == bizarre
-				display.Info(proc_name, "checkcoherence", "c'est pas cohérent")
-				return false
-			}
-		}
-	}
-	return true
-}
-
 func main() {
 
 	// arguments en entree
@@ -491,7 +477,7 @@ func main() {
 			display.Error(*p_nom, "erreur", "Lecture stdin terminée ou en erreur: "+err.Error())
 			//return
 		}
-		//display.Info(*p_nom, "main", "recu : "+rcvmsg)
+		display.Info(*p_nom, "main", "recu : "+rcvmsg)
 		if is_ctl_message(rcvmsg) { // reception d'un autre site
 
 			receiveColor := protocol.Findval(rcvmsg, "color", proc_name)
