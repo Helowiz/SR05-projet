@@ -162,7 +162,7 @@ De plus, nous avons développé le fait d'effectuer plusieurs snapshots.
 ### Cohérence et synchronisation
 #### Estampilles (horloge logique) pour ordonner les requêtes
 #### Horloge vectorielle pour la cohérence causale
-Implémentation de l'horloge à travers un map[int]. 
+Implémentation de l'horloge à travers un map[int]int. 
 L'horloge est mise à jour à chaque message reçu par le controleur, puisque chaque site envoie sa propre horloge dans les messages. 
 Elle est aussi mise à jour à l'emplacement du site qui la possède à chaque action. 
 Elle sert pour tester la cohérence lors du snapshot, puisque chaque site n'est pas censé posséder une information plus avancée à propos d'un site dans son horloge que le site en question. 
