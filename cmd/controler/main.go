@@ -136,17 +136,11 @@ func parse_ctl_message(msg string) {
 	// si le msg est bien un msg de l'app (et pas de la snapshot)
 	isAppMsg := msg_content == "requete" || msg_content == "accuse" || msg_content == "liberation"
 
-	if receiveColor == RED && color == WHITE { // signal pour prendre une snapshot
-		color = RED
-		stopSnapshot = true
-		sendToApp("snapshot_app", protocol.VectToString(horloge_vect))
-	}
-
 	if isAppMsg && receiveColor == WHITE && color == RED { // msg prepost
 		if initiator {
-			handlePrepostMsg(msg)
+			handlePrepostMsg(protocol.Findval(msg, "msg", proc_name))
 		} else {
-			msgToSend := "prepost" + protocol.Msg_format("value", msg)
+			msgToSend := "prepost" + protocol.Msg_format("value", protocol.Findval(msg, "msg", proc_name))
 			envoyer_tous(msgToSend)
 		}
 	}
@@ -192,6 +186,7 @@ func parse_ctl_message(msg string) {
 			globalState = snapshot.Merge(globalState, receiveSnapshot)
 			nbStateExpected--
 			nbMsgExpected = nbMsgExpected + receiveTotal
+			display.Info("", "STATE", "Etat attendu : "+strconv.Itoa(nbStateExpected)+" message attentu : "+strconv.Itoa(nbMsgExpected))
 			if nbStateExpected == 0 && nbMsgExpected == 0 {
 				endSnapshot()
 			}
@@ -214,7 +209,7 @@ func parse_ctl_message(msg string) {
 
 func endSnapshot() {
 	snapshot.SaveSnapshot(globalState)
-	envoyer_tous("reset_snapshot")
+	envoyer_tous("reset_snapshot" + protocol.Msg_format("snap_id", strconv.Itoa(idCurrentSnap)))
 	resetSnapshot()
 }
 
