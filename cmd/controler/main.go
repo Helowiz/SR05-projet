@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"os"
 	"strconv"
-	"strings"
 )
 
 type EltMapFile struct {
@@ -39,10 +38,12 @@ var horloge_vect = make(map[int]int)    // map pour l'horloge vectorielles
 // Snapshot
 const WHITE string = "blanc"
 const RED string = "rouge"
+const APP_SNAPSHOT string = "snapshot"
 
 var stopSnapshot = false
 var sauvMsg []string
 
+// Pour l'algo
 var color = WHITE
 var initiator = false
 var total = 0
@@ -54,17 +55,6 @@ var nbStateExpected int
 var nbMsgExpected int
 
 var idCurrentSnap = 0
-
-/* Fonction utilitaire juste pour print la map file*/
-func map_file_to_string() string {
-	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("%-10s %-15s %-10s\n", "ID", "MSG_TYPE", "VAL_H"))
-	sb.WriteString(strings.Repeat("-", 35) + "\n")
-	for k, v := range map_file {
-		sb.WriteString(fmt.Sprintf("%-10d %-15s %-10d\n", k, v.msg_type, v.val_h))
-	}
-	return sb.String()
-}
 
 /* Check si j'ai la plus petite estampille et que j'ai bien tout les sites dans la map*/
 func smallest_estampille() bool {
@@ -209,7 +199,7 @@ func parse_ctl_message(msg string) {
 
 func endSnapshot() {
 	snapshot.SaveSnapshot(globalState)
-	envoyer_tous("reset_snapshot" + protocol.Msg_format("snap_id", strconv.Itoa(idCurrentSnap)))
+	envoyer_tous("reset_snapshot")
 	resetSnapshot()
 }
 
@@ -227,21 +217,6 @@ func handlePrepostMsg(msg string) {
 	globalState = snapshot.MergeMsg(globalState, msg)
 
 	display.Info("", "PREPOST", "Etat attendu : "+strconv.Itoa(nbStateExpected)+" message attentu : "+strconv.Itoa(nbMsgExpected))
-	if nbStateExpected == 0 && nbMsgExpected == 0 {
-		endSnapshot()
-	}
-}
-
-func handleStateMsg(msg string) {
-	receiveGlobalState := protocol.Findval(msg, "global_state", proc_name)
-	receiveTotal, _ := strconv.Atoi(protocol.Findval(msg, "total", proc_name))
-	receiveSnapshot, _ := snapshot.ToSnapshot(receiveGlobalState)
-
-	globalState = snapshot.Merge(globalState, receiveSnapshot)
-	nbStateExpected--
-	nbMsgExpected += receiveTotal
-	display.Envoie(proc_name, "STATE", "TOTAL AJOUTE"+strconv.Itoa(receiveTotal))
-	display.Envoie(proc_name, "STATE", "Etat attendu : "+strconv.Itoa(nbStateExpected)+" message attentu : "+strconv.Itoa(nbMsgExpected))
 	if nbStateExpected == 0 && nbMsgExpected == 0 {
 		endSnapshot()
 	}
@@ -270,17 +245,15 @@ func parse_app_msg(msg string) {
 		idCurrentSnap++
 		nbStateExpected = n_sites - 1
 		nbMsgExpected = total
-	case "snapshot": // Snapshot reçu de l'APP
+	case APP_SNAPSHOT: // Snapshot reçu de l'APP
 		receiveSnapshot := protocol.Findval(msg, "snap", proc_name)
 		localStat, _ = snapshot.ToSnapshot(receiveSnapshot)
 
-		localStat.HorlogeVect = make(map[int]int)
+		localStat.HorlogeVect = make(map[int]int) // TODO faire une fonction de ça
 		for k, v := range horloge_vect {
 			localStat.HorlogeVect[k] = v
 		}
 		snapshotStr, _ := snapshot.ToString(localStat)
-
-		display.Info(proc_name, "ROUGE", proc_name+" devient Rouge et prend une snapshot : "+snapshotStr)
 		msgToSend := "state" + protocol.Msg_format("global_state", snapshotStr) + protocol.Msg_format("total", strconv.Itoa(total))
 		envoyer_tous(msgToSend)
 
@@ -474,6 +447,25 @@ func sendToCtl(msg string) {
 	fmt.Println(msg)
 }
 
+// HVSnap c'est {A: {HVA}, B:{HVB}}
+func checkCoherenceSnap(HVSnap map[int]map[int]int) bool {
+	for site_a, HVa := range HVSnap {
+		for site_b, HVb := range HVSnap {
+			if site_a == site_b { // c'est le même site
+				continue
+			}
+			nb_msg_b_site_a := protocol.GetVal(HVa, site_b)
+			nb_msg_b_site_b := protocol.GetVal(HVb, site_b)
+
+			if nb_msg_b_site_a > nb_msg_b_site_b { // si A à reçu plus que B à envoyer == bizarre
+				display.Info(proc_name, "checkcoherence", "c'est pas cohérent")
+				return false
+			}
+		}
+	}
+	return true
+}
+
 func main() {
 
 	// arguments en entree
@@ -508,12 +500,12 @@ func main() {
 			if receiveIdSnap > idCurrentSnap && receiveColor == RED && color == WHITE { // signal pour prendre une snapshot
 				color = RED
 				stopSnapshot = true
-				idCurrentSnap = receiveIdSnap
+				idCurrentSnap = receiveIdSnap // pour le reset et pas recevoir des messages rouge alors qu'on est redevenu blanc et réenclencher une snapshot
 				display.Envoie(proc_name, "MAIN", proc_name+"devient ROUGE TOTAL "+strconv.Itoa(total))
 				sendToApp("snapshot_app", protocol.VectToString(horloge_vect))
 			}
 
-			if stopSnapshot {
+			if stopSnapshot { // pour bloquer le controleur pendant la prise de snap depuis l'app
 				sauvMsg = append(sauvMsg, rcvmsg)
 			} else {
 				handleMsg(rcvmsg)
