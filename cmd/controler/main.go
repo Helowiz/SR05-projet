@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"os"
 	"strconv"
-	"strings"
 )
 
 type EltMapFile struct {
@@ -38,7 +37,7 @@ var horloge_vect = make(map[int]int)    // map pour l'horloge vectorielles
 const WHITE string = "blanc"
 const RED string = "rouge"
 
-var stopSnapshot = false
+// var stopSnapshot = false
 var sauvMsg []string
 
 var color = WHITE
@@ -52,6 +51,7 @@ var nbStateExpected int
 var nbMsgExpected int
 
 var idCurrentSnap = 0
+var stopSnapshot = false
 
 /* Fonction utilitaire juste pour print la map file*/
 func map_file_to_string() string {
@@ -134,6 +134,12 @@ func parse_ctl_message(msg string) {
 	// si le msg est bien un msg de l'app (et pas de la snapshot)
 	isAppMsg := msg_content == "requete" || msg_content == "accuse" || msg_content == "liberation"
 
+	if receiveColor == RED && color == WHITE { // signal pour prendre une snapshot
+		color = RED
+		stopSnapshot = true
+		sendToApp("snapshot_app", protocol.VectToString(horloge_vect))
+	}
+
 	if isAppMsg && receiveColor == WHITE && color == RED { // msg prepost
 		if initiator {
 			handlePrepostMsg(protocol.Findval(msg, "msg", proc_name))
@@ -197,6 +203,9 @@ func parse_ctl_message(msg string) {
 		if receiveSnapId == idCurrentSnap { // On ne reset que si c'est le bon snapshot
 			resetSnapshot()
 		}
+	case "reload_snapshot":
+		// demande la dernière global state
+		// envoie la global state à l'APP
 	default:
 		return
 	}
@@ -227,6 +236,21 @@ func handlePrepostMsg(msg string) {
 	}
 }
 
+func handleStateMsg(msg string) {
+	receiveGlobalState := protocol.Findval(msg, "global_state", proc_name)
+	receiveTotal, _ := strconv.Atoi(protocol.Findval(msg, "total", proc_name))
+	receiveSnapshot, _ := snapshot.ToSnapshot(receiveGlobalState)
+
+	globalState = snapshot.Merge(globalState, receiveSnapshot)
+	nbStateExpected--
+	nbMsgExpected += receiveTotal
+	display.Envoie(proc_name, "STATE", "TOTAL AJOUTE"+strconv.Itoa(receiveTotal))
+	display.Envoie(proc_name, "STATE", "Etat attendu : "+strconv.Itoa(nbStateExpected)+" message attentu : "+strconv.Itoa(nbMsgExpected))
+	if nbStateExpected == 0 && nbMsgExpected == 0 {
+		endSnapshot()
+	}
+}
+
 /* Traite un message recu de l'application de base */
 func parse_app_msg(msg string) {
 	type_msg := protocol.Findval(msg, "type", proc_name) // s'il retourne vide on ignore le message de toute facon
@@ -238,6 +262,7 @@ func parse_app_msg(msg string) {
 		newData := protocol.Findval(msg, "data", proc_name)
 		app_fin_sc(newData)
 	case "snapshot_init":
+		display.Info(proc_name, "SNAPINIT", "début de snapshot")
 		color = RED
 		initiator = true
 		localStat, _ = snapshot.ToSnapshot(protocol.Findval(msg, "snap", proc_name))
@@ -259,7 +284,8 @@ func parse_app_msg(msg string) {
 		}
 		snapshotStr, _ := snapshot.ToString(localStat)
 
-		display.Info(proc_name, "ROUGE", proc_name+" devient Rouge et prend une snapshot : "+snapshotStr)
+		display.Envoie(proc_name, "SNAPAPP", proc_name+" a pris une snapshot : "+snapshotStr)
+		display.Info(proc_name, "", proc_name+"envoie la  snap à l'init")
 		msgToSend := "state" + protocol.Msg_format("global_state", snapshotStr) + protocol.Msg_format("total", strconv.Itoa(total))
 		envoyer_tous(msgToSend)
 
@@ -268,6 +294,10 @@ func parse_app_msg(msg string) {
 			handleMsg(m)
 		}
 		sauvMsg = nil
+	case "reload":
+		// demande la dernière global state
+		// envoie la global state à l'APP
+		// faire passer le message
 	default:
 		return
 	}
