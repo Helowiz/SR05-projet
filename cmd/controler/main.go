@@ -128,9 +128,9 @@ func parse_ctl_message(msg string) {
 
 	if isAppMsg && receiveColor == WHITE && color == RED { // msg prepost
 		if initiator {
-			handlePrepostMsg(protocol.Findval(msg, "msg", proc_name))
+			handlePrepostMsg(msg)
 		} else {
-			msgToSend := "prepost" + protocol.Msg_format("value", protocol.Findval(msg, "msg", proc_name))
+			msgToSend := "prepost" + protocol.Msg_format("value", msg)
 			envoyer_tous(msgToSend)
 		}
 	}
