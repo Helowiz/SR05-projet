@@ -262,11 +262,11 @@ func parse_app_msg(msg string) {
 		msgToSend := "state" + protocol.Msg_format("global_state", snapshotStr) + protocol.Msg_format("total", strconv.Itoa(total))
 		envoyer_tous(msgToSend)
 
-		stopSnapshot = false
 		for _, m := range sauvMsg {
 			handleMsg(m)
 		}
 		sauvMsg = nil
+		stopSnapshot = false
 	case "reload":
 		// demande la dernière global state
 		// envoie la global state à l'APP
@@ -478,7 +478,7 @@ func main() {
 			display.Error(*p_nom, "erreur", "Lecture stdin terminée ou en erreur: "+err.Error())
 			//return
 		}
-		display.Info(*p_nom, "main", "recu : "+rcvmsg)
+		//display.Info(*p_nom, "main", "recu : "+rcvmsg)
 		if is_ctl_message(rcvmsg) { // reception d'un autre site
 
 			receiveColor := protocol.Findval(rcvmsg, "color", proc_name)
