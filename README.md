@@ -170,7 +170,7 @@ Elle sert pour tester la cohérence lors du snapshot, puisque chaque site n'est 
 ### Interface graphique
 L'interface a été développée en HTML/CSS/JavaScript.
 
-Une première base a été générée avec l'aide de Claude (modèle Sonnet 4.6), puis adaptée et corrigée par l'équipe pour correspondre aux besoins du projet, notamment sur le redimensionnement et le déplacement des formes.
+Une première base a été générée avec l'aide de Claude (modèle Sonnet 4.6), puis adaptée et corrigée par l'équipe pour correspondre aux besoins du projet, notamment sur le redimensionnement et le déplacement des formes. Cette version initiale se trouve dans le fichier `web/interface_originale.html`.
 
 L'interface a ensuite été nettoyée pour offrir une expérience plus lisible et plus stable, en particulier lors des modifications concurrentes.
 
