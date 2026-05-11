@@ -204,7 +204,7 @@ func endSnapshot() {
 	} else {
 		display.Error(proc_name, "endSnapshot", "Snapshot incohérente !")
 	}
-	envoyer_tous("reset_snapshot" + protocol.Msg_format("snap_id", strconv.Itoa(idCurrentSnap))) // TODO
+	envoyer_tous("reset_snapshot") // TODO
 	resetSnapshot()
 }
 
