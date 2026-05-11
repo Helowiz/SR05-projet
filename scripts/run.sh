@@ -33,4 +33,5 @@ echo "==> Démarrage de l'anneau..."
 #./run_with_another_site.sh ./bin/app ./bin/ctl wsl 172.26.153.23
 ./anneau.sh ./bin/app ./bin/ctl
 #./complet.sh ./bin/app ./bin/ctl
-#/chaine.sh ./bin/app ./bin/ctl
+#./chaine.sh ./bin/app ./bin/ctl
+#./quelconque.sh ./bin/app ./bin/ctl
