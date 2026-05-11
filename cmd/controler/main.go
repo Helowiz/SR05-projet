@@ -130,7 +130,7 @@ func parse_ctl_message(msg string) {
 		if initiator {
 			handlePrepostMsg(msg)
 		} else {
-			msgToSend := "prepost" + protocol.Msg_format("value", msg)
+			msgToSend := "prepost" + protocol.Msg_format("value", protocol.Findval(msg, "msg", proc_name))
 			envoyer_tous(msgToSend)
 		}
 	}
@@ -204,7 +204,7 @@ func endSnapshot() {
 	} else {
 		display.Error(proc_name, "endSnapshot", "Snapshot incohérente !")
 	}
-	envoyer_tous("reset_snapshot")
+	envoyer_tous("reset_snapshot" + protocol.Msg_format("snap_id", strconv.Itoa(idCurrentSnap))) // TODO
 	resetSnapshot()
 }
 
@@ -250,7 +250,7 @@ func parse_app_msg(msg string) {
 		idCurrentSnap++
 		nbStateExpected = n_sites - 1
 		nbMsgExpected = total
-	case APP_SNAPSHOT: // Snapshot reçu de l'APP
+	case "snapshot": // Snapshot reçu de l'APP
 		receiveSnapshot := protocol.Findval(msg, "snap", proc_name)
 		localStat, _ = snapshot.ToSnapshot(receiveSnapshot)
 
