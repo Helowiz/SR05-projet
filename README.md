@@ -152,6 +152,9 @@ Chaque échange est structuré pour limiter les ambiguïtés de parsing et garan
 
 ## Fonctionnalités
 ### File d'attente répartie
+
+Nous avons implémenté l’algorithme de file d’attente répartie pour l’exclusion mutuelle distribuée. Cela a été réalisé grâce à une map `map[int]EltMapFile`, où `EltMapFile` est une structure contenant l’horloge ainsi que le type de message reçu (requête, accusé de réception ou libération). L’utilisation d’une map au lieu d’une liste impose de vérifier que tous les sites sont bien présents dans la map avant d’entrer en section critique, même si nous possédons la plus petite estampille.
+
 ### Sauvegarde d'état global via snapshots
 Nous avons implémenté l'algorithme d'instantané avec reconstitution de configuration vu en cours.
 Cela permet d'avoir une sauvegarde globale de notre système répartie. Nous sauvegardons chaque état de chaque site en plus des messages présents dans les canaux.
@@ -161,7 +164,11 @@ De plus, nous avons développé le fait d'effectuer plusieurs snapshots.
 
 ### Cohérence et synchronisation
 #### Estampilles (horloge logique) pour ordonner les requêtes
+
+Nous avons intégré les estampilles afin d’obtenir un ordre total sur les actions de notre système réparti. Elles ont été implémentées avec une structure Go `Estampille`, qui contient l’horloge logique ainsi que l’identifiant du site. L’identifiant de l’émetteur et la valeur de l’horloge étant envoyés dans les messages de contrôle, nous pouvons reconstruire leur estampille.
+
 #### Horloge vectorielle pour la cohérence causale
+
 Implémentation de l'horloge à travers un map[int]int. 
 L'horloge est mise à jour à chaque message reçu par le controleur, puisque chaque site envoie sa propre horloge dans les messages. 
 Elle est aussi mise à jour à l'emplacement du site qui la possède à chaque action. 
