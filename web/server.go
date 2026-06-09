@@ -70,6 +70,10 @@ func liberer_sc(newOpe string) {
 }
 
 func do_webserver(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path != "/" && r.URL.Path != "/client.html" {
+		http.FileServer(http.Dir("../web/")).ServeHTTP(w, r)
+		return
+	}
 	content, err := os.ReadFile("../web/client.html")
 	if err != nil {
 		http.Error(w, "Impossible de lire le fichier HTML", http.StatusInternalServerError)
