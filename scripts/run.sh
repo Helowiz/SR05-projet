@@ -31,7 +31,7 @@ echo "Compilation réussie."
 echo "==> Démarrage de l'anneau..."
 
 # ./remote_anneau.sh ./bin/app ./bin/ctl <role> <ip>
-./anneau.sh ./bin/app ./bin/ctl
+./anneau.sh ./bin/app ./bin/ctl 
 #./complet.sh ./bin/app ./bin/ctl
 #./chaine.sh ./bin/app ./bin/ctl
 #./quelconque.sh ./bin/app ./bin/ctl

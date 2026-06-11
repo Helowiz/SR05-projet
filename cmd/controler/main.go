@@ -85,6 +85,14 @@ func is_ctl_message(msg string) bool {
 	return false
 }
 
+func is_net_message(msg string) bool {
+	sHrcv := protocol.Findval(msg, "net", proc_name) // les message de control on une champ hlg
+	if sHrcv != "" {
+		return true
+	}
+	return false
+}
+
 /* Extrait l'estampille d'un message, retourne aussi une erreur en cas de probleme */
 func estampille_from_msg(msg string) (Estampille, error) {
 	rcv_h, err := strconv.Atoi(protocol.Findval(msg, "hlg", proc_name))
@@ -281,7 +289,7 @@ func envoyer(msg string, id int) {
 	est := Estampille{this_id, h}
 
 	horloge_vect_str := protocol.VectToString(horloge_vect)
-	sendToCtl(protocol.Msg_format("n_msg", strconv.Itoa(n_msg)) + protocol.Msg_format("target", strconv.Itoa(id)) + protocol.Msg_format("id", strconv.Itoa(est.id_site)) + protocol.Msg_format("hlg", strconv.Itoa(est.val_h)) + protocol.Msg_format("hlgvect", horloge_vect_str) + protocol.Msg_format("msg", msg) + protocol.Msg_format("color", color))
+	sendToNet(protocol.Msg_format("n_msg", strconv.Itoa(n_msg)) + protocol.Msg_format("target", strconv.Itoa(id)) + protocol.Msg_format("id", strconv.Itoa(est.id_site)) + protocol.Msg_format("hlg", strconv.Itoa(est.val_h)) + protocol.Msg_format("hlgvect", horloge_vect_str) + protocol.Msg_format("msg", msg) + protocol.Msg_format("color", color))
 }
 
 func envoyer_tous(msg string) {
@@ -290,7 +298,7 @@ func envoyer_tous(msg string) {
 
 	horloge_vect_str := protocol.VectToString(horloge_vect)
 	// id=id_site hlg=val_h msg=msg
-	sendToCtl(protocol.Msg_format("n_msg", strconv.Itoa(n_msg)) + protocol.Msg_format("id", strconv.Itoa(est.id_site)) + protocol.Msg_format("hlg", strconv.Itoa(est.val_h)) + protocol.Msg_format("hlgvect", horloge_vect_str) + protocol.Msg_format("msg", msg) + protocol.Msg_format("color", color))
+	sendToNet(protocol.Msg_format("n_msg", strconv.Itoa(n_msg)) + protocol.Msg_format("id", strconv.Itoa(est.id_site)) + protocol.Msg_format("hlg", strconv.Itoa(est.val_h)) + protocol.Msg_format("hlgvect", horloge_vect_str) + protocol.Msg_format("msg", msg) + protocol.Msg_format("color", color))
 }
 
 /* Envoi aux autres le signal de liberation avec les donnes a jour*/
@@ -298,7 +306,7 @@ func envoyer_liberation(newData string) {
 	n_msg++
 	est := Estampille{this_id, h}
 	horloge_vect_str := protocol.VectToString(horloge_vect)
-	sendToCtl(protocol.Msg_format("n_msg", strconv.Itoa(n_msg)) + protocol.Msg_format("id", strconv.Itoa(est.id_site)) + protocol.Msg_format("hlg", strconv.Itoa(est.val_h)) + protocol.Msg_format("hlgvect", horloge_vect_str) + protocol.Msg_format("msg", "liberation") + protocol.Msg_format("data", newData))
+	sendToNet(protocol.Msg_format("n_msg", strconv.Itoa(n_msg)) + protocol.Msg_format("id", strconv.Itoa(est.id_site)) + protocol.Msg_format("hlg", strconv.Itoa(est.val_h)) + protocol.Msg_format("hlgvect", horloge_vect_str) + protocol.Msg_format("msg", "liberation") + protocol.Msg_format("data", newData))
 
 }
 
@@ -309,7 +317,7 @@ func sendToApp(msg_type string, value string) {
 
 /* Route le message sans modifs aux successeurs*/
 func forward(msg string) {
-	sendToCtl(msg)
+	sendToNet(msg)
 }
 
 /* Previens l'application de base qu'on est en section critique*/
@@ -445,10 +453,11 @@ func handleMsg(msg string) {
 	}
 }
 
-func sendToCtl(msg string) {
+func sendToNet(msg string) {
 	if color == RED {
 		msg += protocol.Msg_format("snap_id", strconv.Itoa(idCurrentSnap))
 	}
+	display.Envoie(proc_name, "MAIN_CTL", proc_name+"contenu qu'on envoie au net "+msg)
 	fmt.Println(msg)
 }
 
@@ -480,6 +489,7 @@ func main() {
 		}
 		//display.Info(*p_nom, "main", "recu : "+rcvmsg)
 		if is_ctl_message(rcvmsg) { // reception d'un autre site
+			display.Recu(proc_name, "MAIN_CTL", proc_name+"contenu "+rcvmsg)
 
 			receiveColor := protocol.Findval(rcvmsg, "color", proc_name)
 			receiveIdSnap, _ := strconv.Atoi(protocol.Findval(rcvmsg, "snap_id", ""))
