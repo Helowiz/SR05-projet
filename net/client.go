@@ -46,9 +46,9 @@ func client(adress string, port string, connectionMap map[string]net.Conn, event
 		}
 	}
 
-	demande_msg := protocol.Msg_format("msg", msg_type)
+	demande_msg := protocol.Msg_format_NET("msg", msg_type)
 	if alreadyAdmitted {
-		demande_msg = demande_msg + protocol.Msg_format("from", id)
+		demande_msg = demande_msg + protocol.Msg_format_NET("from", id)
 	}
 	conn.Write([]byte(demande_msg))
 

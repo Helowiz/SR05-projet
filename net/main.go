@@ -82,7 +82,7 @@ func debutVagueElection() {
 		elu = id
 		NbVoisinsAttendus = len(connectionMap)
 		Vague(id, "debutDiffusionVague", "DEBUT DE LA VAGUE")
-		msg := protocol.Msg_format("msg", BLEU) + protocol.Msg_format("elu", id) //envoie aux voisins
+		msg := protocol.Msg_format_NET("msg", BLEU) + protocol.Msg_format_NET("elu", id) //envoie aux voisins
 		send_to_neigh(msg, "")
 
 	}
@@ -110,7 +110,7 @@ func lirestdin(eventFile chan<- Event) {
 
 		if is_ctl_message(rcvmsg) {
 			display.Recu("MAIN_NET", id, "contenu reçu par mon controleur et que je boradcast aux autres"+rcvmsg)
-			broadcast(rcvmsg)
+			broadcast(protocol.Msg_format_NET("msg", CTL_MESSAGE) + protocol.Msg_format_NET("content", rcvmsg))
 
 		}
 	}
@@ -124,19 +124,19 @@ func recptionMsgBleu(from string, elu_recu string) {
 		elu = elu_recu
 		NbVoisinsAttendus = len(connectionMap) - 1
 		if NbVoisinsAttendus > 0 {
-			msg = protocol.Msg_format("msg", BLEU) + protocol.Msg_format("elu", elu_recu)
+			msg = protocol.Msg_format_NET("msg", BLEU) + protocol.Msg_format_NET("elu", elu_recu)
 			Vague(id, "recsBleu", "NB VOISIN ATTENDU: "+strconv.Itoa(NbVoisinsAttendus)+" Mes voisins :"+strings.Join(getVoisinsList(), ", ")+" MESSAGE"+msg)
 
 			send_to_neigh(msg, parent)
 		} else {
-			msg = protocol.Msg_format("msg", ROUGE) + protocol.Msg_format("elu", elu_recu)
+			msg = protocol.Msg_format_NET("msg", ROUGE) + protocol.Msg_format_NET("elu", elu_recu)
 			send(msg, parent)
 			Vague(id, "recBleu", "NB VOISIN ATTENDU: "+strconv.Itoa(NbVoisinsAttendus)+" Mes voisins :"+strings.Join(getVoisinsList(), ", ")+" MESSAGE"+msg)
 		}
 	} else {
 
 		if elu == elu_recu { // msg de la mm vague, => remontée vers parent
-			msg = protocol.Msg_format("msg", ROUGE) + protocol.Msg_format("elu", elu)
+			msg = protocol.Msg_format_NET("msg", ROUGE) + protocol.Msg_format_NET("elu", elu)
 			send(msg, parent)
 			Vague(id, "recBleu", "NB VOISIN ATTENDU: "+strconv.Itoa(NbVoisinsAttendus)+" MESSAGE"+msg)
 		}
@@ -160,7 +160,7 @@ func receptionMsgRouge(from string, elu_recu string, eventFile chan<- Event) {
 				handleAdmit(*pendingAjout, eventFile)
 
 			} else {
-				msg := protocol.Msg_format("msg", ROUGE) + protocol.Msg_format("elu", elu)
+				msg := protocol.Msg_format_NET("msg", ROUGE) + protocol.Msg_format_NET("elu", elu)
 				Vague(id, "recRouge", "NB VOISIN ATTENDU: "+strconv.Itoa(NbVoisinsAttendus)+"MESSAGE"+msg)
 				send(msg, parent)
 			}
@@ -182,7 +182,7 @@ func handleNewMember(new_member_id string) {
 	if parent != "" || elu != "" { // on etait dans une election, on la perd
 		parent = ""
 		elu = ""
-		broadcast(protocol.Msg_format("msg", NEW_MEMBER) + protocol.Msg_format("his_id", new_member_id))
+		broadcast(protocol.Msg_format_NET("msg", NEW_MEMBER) + protocol.Msg_format_NET("his_id", new_member_id))
 	}
 }
 
@@ -255,7 +255,8 @@ func handleMessage(content string, conn net.Conn, eventFile chan<- Event) {
 
 	default:
 		{
-			display.Recu("MAIN_NET", id, "contenu reçu par un autre controleur et que j'envoie au mien"+content)
+			display.Recu("MAIN_NET", id, "DEBUG:contenu reçu par un autre controleur et que j'envoie au mien all"+content)
+			display.Recu("MAIN_NET", id, "DEBUG:contenu reçu par un autre controleur et que j'envoie au mien findval.content"+protocol.FindvalLight(content, "content"))
 
 			sendToCrl(protocol.FindvalLight(content, "content"))
 		}

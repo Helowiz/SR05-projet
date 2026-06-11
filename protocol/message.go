@@ -7,8 +7,11 @@ import (
 	"strings"
 )
 
-var fieldsep = "/"
-var keyvalsep = "="
+var fieldsepCtrl = "/"
+var keyvalsepCtrl = "="
+
+var fieldsepNET = "["
+var keyvalsepNET = ":"
 
 type Interval struct {
 	debut int
@@ -23,8 +26,12 @@ const ROUGE = "rouge"
 const VAGUE = "vague"
 const NEW_MEMBER = "new_member"
 
-func Msg_format(key string, val string) string {
-	return fieldsep + keyvalsep + key + keyvalsep + val
+func Msg_format_Ctrl(key string, val string) string {
+	return fieldsepCtrl + keyvalsepCtrl + key + keyvalsepCtrl + val
+}
+
+func Msg_format_NET(key string, val string) string {
+	return fieldsepNET + keyvalsepNET + key + keyvalsepNET + val
 }
 
 func Recaler(x, y int) int {
@@ -257,7 +264,7 @@ func FindvalLight(msg string, key string) string {
 	for _, keyval := range tab_allkeyvals {
 		equ := keyval[0:1]
 
-		tabkeyval := strings.Split(keyval[1:], equ)
+		tabkeyval := strings.SplitN(keyval[1:], equ, 2)
 		if tabkeyval[0] == key && len(tabkeyval) == 2 {
 			return tabkeyval[1]
 		}

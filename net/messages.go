@@ -79,7 +79,7 @@ func Findval(msg string, key string, name string) string {
 Envoi le message a tout les voisins sauf celui passe en exclude
 */
 func send_to_neigh(msg string, exclude string) {
-	msg = protocol.Msg_format("from", id) + protocol.Msg_format("num_msg", strconv.Itoa(current_msg_num)) + msg
+	msg = protocol.Msg_format_NET("from", id) + protocol.Msg_format_NET("num_msg", strconv.Itoa(current_msg_num)) + msg
 
 	for id_neigh, _ := range connectionMap {
 		if id_neigh != exclude {
@@ -97,7 +97,7 @@ Envoi le message a tout les voisins en leur disant de l'envoyer a leur tour aux 
 */
 func broadcast(msg string) {
 
-	msg = protocol.Msg_format("to", "all") + protocol.Msg_format("from", id) + protocol.Msg_format("num_msg", strconv.Itoa(current_msg_num)) + msg
+	msg = protocol.Msg_format_NET("to", "all") + protocol.Msg_format_NET("from", id) + protocol.Msg_format_NET("num_msg", strconv.Itoa(current_msg_num)) + msg
 	send_to_neigh(msg, "")
 	current_msg_num++
 }
@@ -109,7 +109,7 @@ Envoi un message a un site ciblé
 */
 
 func send(msg string, to string) {
-	msg = protocol.Msg_format("from", id) + protocol.Msg_format("to", to) + protocol.Msg_format("num_msg", strconv.Itoa(current_msg_num)) + msg
+	msg = protocol.Msg_format_NET("from", id) + protocol.Msg_format_NET("to", to) + protocol.Msg_format_NET("num_msg", strconv.Itoa(current_msg_num)) + msg
 	// si c'est pour mon voisin, j'envoi que a lui
 	if conn, ok := connectionMap[to]; ok {
 		_, err := conn.Write([]byte(msg + "\n"))

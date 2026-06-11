@@ -49,23 +49,23 @@ func doLocalSnapshot() {
 		initiate = false // reset pour prochaine snapshot
 		msgType = "snapshot_init"
 	}
-	msg := protocol.Msg_format("type", msgType) + protocol.Msg_format("snap", snap)
+	msg := protocol.Msg_format_Ctrl("type", msgType) + protocol.Msg_format_Ctrl("snap", snap)
 	//display.Info("SNAP", "snapshot", msg)
 	fmt.Println(msg)
 }
 
 func reloadSnapshot() {
-	msg := protocol.Msg_format("type", "relaod")
+	msg := protocol.Msg_format_Ctrl("type", "relaod")
 	fmt.Println(msg)
 }
 
 func demander_sc() {
-	msg := protocol.Msg_format("type", "fromapp_debut_sc")
+	msg := protocol.Msg_format_Ctrl("type", "fromapp_debut_sc")
 	fmt.Println(msg)
 }
 
 func liberer_sc(newOpe string) {
-	msg := protocol.Msg_format("type", "fromapp_fin_sc") + protocol.Msg_format("data", newOpe)
+	msg := protocol.Msg_format_Ctrl("type", "fromapp_fin_sc") + protocol.Msg_format_Ctrl("data", newOpe)
 	fmt.Println(msg)
 }
 

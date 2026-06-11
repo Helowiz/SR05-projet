@@ -115,7 +115,7 @@ func handleAdmit(conn net.Conn, eventQueue chan<- Event) {
 	new_id := makeUniqueId()
 
 	// TODO - mettre ca dans une fonction speciale ?
-	tosend := protocol.Msg_format("num_msg", strconv.Itoa(current_msg_num)) + protocol.Msg_format("from", id) + protocol.Msg_format("msg", ADMIS) + protocol.Msg_format("your_id", new_id) + "\n"
+	tosend := protocol.Msg_format_NET("num_msg", strconv.Itoa(current_msg_num)) + protocol.Msg_format_NET("from", id) + protocol.Msg_format_NET("msg", ADMIS) + protocol.Msg_format_NET("your_id", new_id) + "\n"
 	current_msg_num++
 
 	_, err := conn.Write([]byte(tosend))
@@ -126,6 +126,6 @@ func handleAdmit(conn net.Conn, eventQueue chan<- Event) {
 	connectionMap[new_id] = conn
 
 	pendingAjout = nil
-	broadcast(protocol.Msg_format("msg", NEW_MEMBER) + protocol.Msg_format("his_id", new_id))
+	broadcast(protocol.Msg_format_NET("msg", NEW_MEMBER) + protocol.Msg_format_NET("his_id", new_id))
 	go read_messages(conn, eventQueue)
 }
