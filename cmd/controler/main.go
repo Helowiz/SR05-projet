@@ -25,7 +25,7 @@ type Estampille struct {
 var h = 0            // horloge du site
 var this_id int      // id du site (passe en param)
 var proc_name string // nom du site (passe en param)
-var n_sites int      // nombre de sites (passe en param)
+var nbSites = 1      // mis à jour par le NET
 var n_msg = 0        // num serie messages
 
 var intervalles_recus = make(map[int][]protocol.Interval) // check si on a deja recu
@@ -58,7 +58,7 @@ var idCurrentSnap = 0
 
 /* Check si j'ai la plus petite estampille et que j'ai bien tout les sites dans la map*/
 func smallest_estampille() bool {
-	if len(map_file) != n_sites {
+	if len(map_file) != nbSites {
 		return false
 	}
 
@@ -86,8 +86,10 @@ func is_ctl_message(msg string) bool {
 }
 
 func is_net_message(msg string) bool {
-	sHrcv := protocol.Findval(msg, "net", proc_name) // les message de control on une champ hlg
-	if sHrcv != "" {
+	display.Info(proc_name, "DEBUG:is_net_message", "test is_net_message sur : "+msg)
+	val := protocol.Findval(msg, "msg", proc_name)
+	if val == "net" {
+		display.Info(proc_name, "DEBUG:is_net_message", "test is_net_message retourne vrai ")
 		return true
 	}
 	return false
@@ -256,7 +258,7 @@ func parse_app_msg(msg string) {
 		}
 		globalState = snapshot.Merge(nil, localStat)
 		idCurrentSnap++
-		nbStateExpected = n_sites - 1
+		nbStateExpected = nbSites - 1
 		nbMsgExpected = total
 	case "snapshot": // Snapshot reçu de l'APP
 		receiveSnapshot := protocol.Findval(msg, "snap", proc_name)
@@ -351,7 +353,7 @@ func app_dem_sc() {
 	h++
 	horloge_vect[this_id]++
 	map_file[this_id] = EltMapFile{"requete", h}
-	total += (n_sites - 1) // on envoie des messages à tous le monde sauf soi
+	total += (nbSites - 1) // on envoie des messages à tous le monde sauf soi
 	envoyer_tous("requete")
 }
 
@@ -360,7 +362,7 @@ func app_fin_sc(newData string) {
 	h++
 	horloge_vect[this_id]++
 	map_file[this_id] = EltMapFile{"liberation", h}
-	total += (n_sites - 1) // on envoie des messages à tous le monde sauf soi
+	total += (nbSites - 1) // on envoie des messages à tous le monde sauf soi
 	envoyer_liberation(newData)
 	fin_sc_app(newData)
 }
@@ -457,6 +459,7 @@ func sendToCtl(msg string) {
 	if color == RED {
 		msg += protocol.Msg_format_Ctrl("snap_id", strconv.Itoa(idCurrentSnap))
 	}
+
 	display.Envoie(proc_name, "sendToCtl", "envoi : "+msg)
 	fmt.Println(msg)
 }
@@ -465,14 +468,12 @@ func main() {
 
 	// arguments en entree
 	p_nom := flag.String("n", "controler", "nom")
-	p_nbsites := flag.Int("nbsites", 1, "nombre de sites")
 	p_id := flag.Int("id", os.Getpid(), "id du site")
 	flag.Parse()
 
 	// init de l'identite du site
 	proc_name = *p_nom
-	this_id = *p_id      // assigner notre pid a la variable global
-	n_sites = *p_nbsites // nombre de sites
+	this_id = *p_id // assigner notre pid a la variable global
 
 	//initialisation de l'horloge vectorielle
 	horloge_vect[this_id] = 0
@@ -506,10 +507,20 @@ func main() {
 			} else {
 				handleMsg(rcvmsg)
 			}
+
+		} else if is_net_message(rcvmsg) { // reception d'un message du NET
+			display.Recu("MAIN_APP", proc_name, "contenu reçu par mon NET"+rcvmsg)
+
+			nbSites, err = strconv.Atoi(protocol.Findval(rcvmsg, "nb_sites", proc_name))
+			if err != nil {
+				display.Error(proc_name, "main", "Erreur nb_sites recu "+err.Error())
+				panic(err)
+			}
 		} else { // reception de l'application de base
 			h++
 			horloge_vect[this_id]++
 			parse_app_msg(rcvmsg)
 		}
+
 	}
 }

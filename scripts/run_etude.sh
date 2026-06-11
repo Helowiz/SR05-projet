@@ -25,6 +25,6 @@ echo "Compilation réussie."
 
 
 
-./config_etude_easy.sh ./bin/app ./bin/ctl ./bin/net
+./config_etudev1.sh ./bin/app ./bin/ctl ./bin/net
 
 

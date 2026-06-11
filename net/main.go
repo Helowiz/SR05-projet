@@ -41,6 +41,8 @@ var voisins = make(map[string]struct{}, 100)
 var connectionMap = make(map[string]net.Conn, 10)
 var NbVoisinsAttendus int
 
+var nbSites int = 1
+
 /* ELECTION */
 
 var elu = ""
@@ -179,10 +181,14 @@ func handleNewMember(new_member_id string) {
 		(*pendingAjout).Close()
 		pendingAjout = nil
 	}
+
 	if parent != "" || elu != "" { // on etait dans une election, on la perd
 		parent = ""
 		elu = ""
-		broadcast(protocol.Msg_format_NET("msg", NEW_MEMBER) + protocol.Msg_format_NET("his_id", new_member_id))
+		nbSites += 1
+		display.Info(id, "handleNewMember", "envoie nb admis:handleNewMember : "+new_member_id[:10])
+		sendToCrlfromNET(protocol.Msg_format_Ctrl("nb_sites", strconv.Itoa(nbSites)))
+
 	}
 }
 
@@ -237,12 +243,21 @@ func handleMessage(content string, conn net.Conn, eventFile chan<- Event) {
 	case ADMIS:
 		{
 			my_id := protocol.FindvalLight(content, "your_id")
+			nbSites, err = strconv.Atoi(protocol.FindvalLight(content, "nb_sites"))
+			if err != nil {
+				display.Error(id, "handleMessage:ADMIS", "Erreur nb_sites recu "+err.Error())
+				panic(err)
+			}
 			if !admis {
 				admis = true
 				id = my_id
 				connectionMap[from] = conn // mise a jour du connection map
 				// je commence mon serveur
 				go server("localhost", server_port, connectionMap, eventFile)
+				nbSites += 1
+				display.Info(id, "DEBUG:handleNewMember", "envoie nb admis:if!admis : ")
+				sendToCrlfromNET(protocol.Msg_format_Ctrl("nb_sites", strconv.Itoa(nbSites)))
+				go lirestdin(eventFile)
 				Info("", "", "Je suis admis ! Mon id est : "+id)
 			}
 		}
@@ -275,7 +290,11 @@ func sendToCrl(msg string) {
 
 	fmt.Println(msg)
 }
-
+func sendToCrlfromNET(msg string) {
+	display.Envoie("MAIN_NET:sendtocrtlNet", id, "contenu envoyé à mon controleur de la part de net"+msg)
+	msg += protocol.Msg_format_Ctrl("msg", "net")
+	fmt.Println(msg)
+}
 func main() {
 
 	p_server_port := flag.String("p", "8081", "le port de mon contrôleur NET quand je serai admis")
@@ -294,6 +313,7 @@ func main() {
 
 	if admis {
 		id = makeUniqueId()
+
 		go server("localhost", server_port, connectionMap, eventFile)
 		if *p_admitted_port != server_port {
 			go client(*p_admitted_adress, *p_admitted_port, connectionMap, eventFile, true)

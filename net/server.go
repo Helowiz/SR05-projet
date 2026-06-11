@@ -7,6 +7,7 @@ chaque site ecoute sur un serveur pour admettre des nouveaux membress
 
 */
 import (
+	"SR05_projet/display"
 	"SR05_projet/protocol"
 	"net"
 	"strconv"
@@ -115,7 +116,8 @@ func handleAdmit(conn net.Conn, eventQueue chan<- Event) {
 	new_id := makeUniqueId()
 
 	// TODO - mettre ca dans une fonction speciale ?
-	tosend := protocol.Msg_format_NET("num_msg", strconv.Itoa(current_msg_num)) + protocol.Msg_format_NET("from", id) + protocol.Msg_format_NET("msg", ADMIS) + protocol.Msg_format_NET("your_id", new_id) + "\n"
+	tosend := protocol.Msg_format_NET("num_msg", strconv.Itoa(current_msg_num)) + protocol.Msg_format_NET("from", id) + protocol.Msg_format_NET("nb_sites", strconv.Itoa(nbSites)) + protocol.Msg_format_NET("msg", ADMIS) + protocol.Msg_format_NET("your_id", new_id) + "\n"
+
 	current_msg_num++
 
 	_, err := conn.Write([]byte(tosend))
@@ -123,6 +125,10 @@ func handleAdmit(conn net.Conn, eventQueue chan<- Event) {
 	if err != nil {
 		Error(id, "handleAdmit", "Error writting to connection :"+err.Error())
 	}
+	nbSites += 1
+	display.Info(id, "DEBUG:handleADMIT", "envoie nb admis:handleADMIT : ")
+	sendToCrlfromNET(protocol.Msg_format_Ctrl("nb_sites", strconv.Itoa(nbSites)))
+
 	connectionMap[new_id] = conn
 
 	pendingAjout = nil
