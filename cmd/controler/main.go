@@ -86,7 +86,6 @@ func is_ctl_message(msg string) bool {
 }
 
 func is_net_message(msg string) bool {
-	display.Info(proc_name, "DEBUG:is_net_message", "test is_net_message sur : "+msg)
 	val := protocol.Findval(msg, "msg", proc_name)
 	if val == "net" {
 		display.Info(proc_name, "DEBUG:is_net_message", "test is_net_message retourne vrai ")

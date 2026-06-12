@@ -7,7 +7,6 @@ chaque site ecoute sur un serveur pour admettre des nouveaux membress
 
 */
 import (
-	"SR05_projet/display"
 	"SR05_projet/protocol"
 	"net"
 	"strconv"
@@ -41,7 +40,6 @@ func server(adress string, port string, connectionMap map[string]net.Conn, event
 	defer listener.Close()
 
 	Info(id, "server", "Server is listening at : "+adress+":"+port)
-
 	for {
 		// Accept incoming connections
 		conn, err := listener.Accept()
@@ -77,9 +75,7 @@ func handleClient(conn net.Conn, connectionMap map[string]net.Conn, eventQueue c
 		return
 	}
 	fmsg := string(buffer[:n])
-	Info(id, "handleClient", "Premier message : "+fmsg)
 	msg_type := protocol.FindvalLight(fmsg, "msg")
-
 	switch msg_type {
 	case ANNONCE:
 		{
@@ -126,7 +122,6 @@ func handleAdmit(conn net.Conn, eventQueue chan<- Event) {
 		Error(id, "handleAdmit", "Error writting to connection :"+err.Error())
 	}
 	nbSites += 1
-	display.Info(id, "DEBUG:handleADMIT", "envoie nb admis:handleADMIT : ")
 	sendToCrlfromNET(protocol.Msg_format_Ctrl("nb_sites", strconv.Itoa(nbSites)))
 
 	connectionMap[new_id] = conn

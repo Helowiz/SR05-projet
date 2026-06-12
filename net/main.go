@@ -5,6 +5,7 @@ package main
 */
 import (
 	"SR05_projet/display"
+	"SR05_projet/net/logweb"
 	"SR05_projet/protocol"
 	"flag"
 	"fmt"
@@ -14,7 +15,6 @@ import (
 	"os"
 	"slices"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -52,6 +52,8 @@ var elu = ""
 var id string = ""
 var admis = false
 
+/* LOG */
+
 func makeUniqueId() string {
 	return uuid.New().String()
 }
@@ -75,7 +77,6 @@ func doPeriodique(eventFile chan<- Event) {
 		<-alarm.C
 		eventFile <- AlarmEvent{}
 	}
-
 }
 
 func debutVagueElection() {
@@ -83,7 +84,7 @@ func debutVagueElection() {
 		parent = id
 		elu = id
 		NbVoisinsAttendus = len(connectionMap)
-		Vague(id, "debutDiffusionVague", "DEBUT DE LA VAGUE")
+		logweb.Vague(id, "me", "all", parent, elu, BLEU, strconv.Itoa(NbVoisinsAttendus))
 		msg := protocol.Msg_format_NET("msg", BLEU) + protocol.Msg_format_NET("elu", id) //envoie aux voisins
 		send_to_neigh(msg, "")
 
@@ -119,7 +120,7 @@ func lirestdin(eventFile chan<- Event) {
 }
 
 func recptionMsgBleu(from string, elu_recu string) {
-	Vague(id, "recptionMsgBleu", "from : "+simpleIdShowing(from)+" mon_parent : "+simpleIdShowing(parent))
+	logweb.Vague(id, simpleIdShowing(from), "me", parent, elu, BLEU, strconv.Itoa(NbVoisinsAttendus))
 	msg := ""
 	if parent == "" || elu_recu < elu { // Première vague ou id de l’élu est plus petite que la précédente
 		parent = from
@@ -127,35 +128,30 @@ func recptionMsgBleu(from string, elu_recu string) {
 		NbVoisinsAttendus = len(connectionMap) - 1
 		if NbVoisinsAttendus > 0 {
 			msg = protocol.Msg_format_NET("msg", BLEU) + protocol.Msg_format_NET("elu", elu_recu)
-			Vague(id, "recsBleu", "NB VOISIN ATTENDU: "+strconv.Itoa(NbVoisinsAttendus)+" Mes voisins :"+strings.Join(getVoisinsList(), ", ")+" MESSAGE"+msg)
-
 			send_to_neigh(msg, parent)
+			logweb.Vague(id, "me", "all", parent, elu, BLEU, strconv.Itoa(NbVoisinsAttendus))
 		} else {
 			msg = protocol.Msg_format_NET("msg", ROUGE) + protocol.Msg_format_NET("elu", elu_recu)
 			send(msg, parent)
-			Vague(id, "recBleu", "NB VOISIN ATTENDU: "+strconv.Itoa(NbVoisinsAttendus)+" Mes voisins :"+strings.Join(getVoisinsList(), ", ")+" MESSAGE"+msg)
+			logweb.Vague(id, "me", parent, parent, elu, ROUGE, strconv.Itoa(NbVoisinsAttendus))
 		}
 	} else {
 
 		if elu == elu_recu { // msg de la mm vague, => remontée vers parent
 			msg = protocol.Msg_format_NET("msg", ROUGE) + protocol.Msg_format_NET("elu", elu)
 			send(msg, parent)
-			Vague(id, "recBleu", "NB VOISIN ATTENDU: "+strconv.Itoa(NbVoisinsAttendus)+" MESSAGE"+msg)
+			logweb.Vague(id, "me", parent, parent, elu, ROUGE, strconv.Itoa(NbVoisinsAttendus))
 		}
-
 	}
-
 }
 
 func receptionMsgRouge(from string, elu_recu string, eventFile chan<- Event) {
-	Vague(id, "recRouge", "from : "+from+" mon elu : "+elu+" elurecu : "+elu_recu[:10])
+	logweb.Vague(id, simpleIdShowing(from), "me", parent, elu, ROUGE, strconv.Itoa(NbVoisinsAttendus))
 	if elu_recu == elu { // on accept que la vague courante
-
 		NbVoisinsAttendus--
-		Vague(id, "recRouge", "C'est ma vague nbVoisins attendus : "+strconv.Itoa(NbVoisinsAttendus))
 		if NbVoisinsAttendus == 0 {
 			if elu == id { // on a gagne l'election
-				Vague(id, "receptionMsgRouge", "FIN JE SUIS ELU !!! j'admet le site qui demande")
+				logweb.Vague(id, "me", "log", parent, "ELU_TROUVE", ROUGE, strconv.Itoa(NbVoisinsAttendus))
 				parent = ""
 				elu = ""
 				NbVoisinsAttendus = len(voisins)
@@ -163,7 +159,7 @@ func receptionMsgRouge(from string, elu_recu string, eventFile chan<- Event) {
 
 			} else {
 				msg := protocol.Msg_format_NET("msg", ROUGE) + protocol.Msg_format_NET("elu", elu)
-				Vague(id, "recRouge", "NB VOISIN ATTENDU: "+strconv.Itoa(NbVoisinsAttendus)+"MESSAGE"+msg)
+				logweb.Vague(id, "me", parent, parent, elu, ROUGE, strconv.Itoa(NbVoisinsAttendus))
 				send(msg, parent)
 			}
 		}
@@ -287,7 +283,6 @@ func handleAlarm(admitted_adress string, admitted_port string, eventFile chan<- 
 }
 
 func sendToCrl(msg string) {
-
 	fmt.Println(msg)
 }
 func sendToCrlfromNET(msg string) {
@@ -310,7 +305,6 @@ func main() {
 	eventFile := make(chan Event, 100)
 
 	//go lire_msg(eventFile)
-
 	if admis {
 		id = makeUniqueId()
 
@@ -318,7 +312,6 @@ func main() {
 		if *p_admitted_port != server_port {
 			go client(*p_admitted_adress, *p_admitted_port, connectionMap, eventFile, true)
 			go lirestdin(eventFile)
-
 		}
 	} else {
 		go doPeriodique(eventFile)
@@ -341,6 +334,5 @@ func main() {
 			}
 
 		}
-
 	}
 }

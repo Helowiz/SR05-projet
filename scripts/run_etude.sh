@@ -21,10 +21,12 @@ if ! go build -o bin/net ../net; then
     echo "Erreur de compilation pour net"
     exit 1
 fi
+
+if ! go build -o bin/logweb ../net/web; then
+    echo "Erreur de compilation pour log"
+    exit 1
+fi
+
 echo "Compilation réussie."
 
-
-
-./config_etudev1.sh ./bin/app ./bin/ctl ./bin/net
-
-
+./config_etudev1.sh ./bin/app ./bin/ctl ./bin/net ./bin/logweb

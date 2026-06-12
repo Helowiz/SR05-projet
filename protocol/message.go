@@ -27,6 +27,7 @@ const VAGUE = "vague"
 const NEW_MEMBER = "new_member"
 
 func Msg_format_Ctrl(key string, val string) string {
+
 	return fieldsepCtrl + keyvalsepCtrl + key + keyvalsepCtrl + val
 }
 
