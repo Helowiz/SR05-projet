@@ -7,13 +7,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"strconv"
 	"time"
 )
 
 type Snapshot struct {
-	SiteID      int              `json:"site_id"`
-	HorlogeVect map[int]int      `json:"horloge_vect"`
+	SiteID      string           `json:"site_id"`
+	HorlogeVect map[string]int   `json:"horloge_vect"`
 	Board       shape.WhiteBoard `json:"board"`
 }
 
@@ -23,14 +22,8 @@ type GlobalSnapshot struct {
 }
 
 func Shot(board shape.WhiteBoard, id string) *Snapshot {
-	i, err := strconv.Atoi(id)
-	if err != nil {
-		display.Error("SNAPSHOT", "shot", err.Error())
-		return nil
-	}
-
 	snapshot := &Snapshot{
-		SiteID: i,
+		SiteID: id,
 		Board:  board,
 	}
 	return snapshot
@@ -84,8 +77,8 @@ func MergeMsg(global *GlobalSnapshot, msg string) *GlobalSnapshot {
 	return global
 }
 
-func GetHVMap(global GlobalSnapshot) map[int]map[int]int {
-	hv_map := make(map[int]map[int]int)
+func GetHVMap(global GlobalSnapshot) map[string]map[string]int {
+	hv_map := make(map[string]map[string]int)
 	for _, snap := range global.States {
 		hv_map[snap.SiteID] = snap.HorlogeVect
 	}
@@ -93,7 +86,7 @@ func GetHVMap(global GlobalSnapshot) map[int]map[int]int {
 }
 
 // HVSnap c'est {A: {HVA}, B:{HVB}}
-func CheckCoherenceSnap(HVSnap map[int]map[int]int) bool {
+func CheckCoherenceSnap(HVSnap map[string]map[string]int) bool {
 	for site_a, HVa := range HVSnap {
 		for site_b, HVb := range HVSnap {
 			if site_a == site_b { // c'est le même site

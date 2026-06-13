@@ -170,9 +170,9 @@ func ws_send(msg string) {
 }
 
 /* Gere message de control */
-func handle_ctl_msg(msg string, active chan bool) {
-	msg_type := protocol.Findval(msg, "type", "server")
-	msg_val := protocol.Findval(msg, "value", "server")
+func handle_ctl_msg(msg string) {
+	msg_type := protocol.Findval(msg, "type")
+	msg_val := protocol.Findval(msg, "value")
 	switch msg_type {
 	case "section_critique": // message sur la section critique
 		switch msg_val {
@@ -189,7 +189,7 @@ func handle_ctl_msg(msg string, active chan bool) {
 		lastOpe = msg_val
 		ws_send("data=" + msg_val)
 		if msg_val != "" {
-			modify_data(msg_val, active) // update les données dans le whiteboard
+			modify_data(msg_val) // update les données dans le whiteboard
 		}
 	case "snapshot_app":
 		doLocalSnapshot()
@@ -221,9 +221,9 @@ func wait_for_sc(active <-chan bool) bool {
 	return false
 }
 
-func modify_data(newOpe string, active chan bool) {
-	op := protocol.Findval(newOpe, "op", "server")
-	idSite := protocol.Findval(newOpe, "id", "server")
+func modify_data(newOpe string) {
+	op := protocol.Findval(newOpe, "op")
+	idSite := protocol.Findval(newOpe, "id")
 	switch op {
 	case "lock":
 		// no operation
@@ -249,7 +249,6 @@ func modify_data(newOpe string, active chan bool) {
 
 func main() {
 	whiteboard = shape.Empty_board()
-	var active = make(chan bool)
 	var eventQueue = make(chan Event, 100)
 
 	port = flag.String("port", "4444", "n° de port")
@@ -271,7 +270,7 @@ func main() {
 		for event := range eventQueue {
 			switch event.from {
 			case CONTROL:
-				handle_ctl_msg(event.content, active)
+				handle_ctl_msg(event.content)
 			case WEBSOCKET:
 				handle_ws_msg(event.content)
 			}

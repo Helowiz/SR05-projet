@@ -24,10 +24,10 @@ fi
 #     exit 1
 # fi
 
-if ! go build -o bin/logweb ../net/web; then
-    echo "Erreur de compilation pour log"
-    exit 1
-fi
+# if ! go build -o bin/logweb ../net/web; then
+#     echo "Erreur de compilation pour log"
+#     exit 1
+# fi
 
 echo "Compilation réussie."
 
