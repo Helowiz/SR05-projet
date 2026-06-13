@@ -7,6 +7,7 @@ chaque site ecoute sur un serveur pour admettre des nouveaux membress
 
 */
 import (
+	"SR05_projet/net/logweb"
 	"SR05_projet/protocol"
 	"net"
 	"strconv"
@@ -32,6 +33,7 @@ Quand un client se connect il créer la socket pour ce client et la donne a  han
 */
 func server(adress string, port string, connectionMap map[string]net.Conn, eventQueue chan<- Event) {
 	// Listen for incoming connections
+	logweb.Admis(id, adress, port)
 	listener, err := net.Listen("tcp", adress+":"+port)
 	if err != nil {
 		Error(id, "server", "Error listening on "+adress+":"+port+" :"+err.Error())
@@ -39,7 +41,7 @@ func server(adress string, port string, connectionMap map[string]net.Conn, event
 	}
 	defer listener.Close()
 
-	Info(id, "server", "Server is listening at : "+adress+":"+port)
+	//Info(id, "server", "Server is listening at : "+adress+":"+port)
 	for {
 		// Accept incoming connections
 		conn, err := listener.Accept()
@@ -80,9 +82,10 @@ func handleClient(conn net.Conn, connectionMap map[string]net.Conn, eventQueue c
 	case ANNONCE:
 		{
 			from := protocol.FindvalLight(fmsg, "from")
-			Info(id, "handleClient", "Annonce de mon voisin : "+from+" !")
+			//Info(id, "handleClient", "Annonce de mon voisin : "+from+" !")
 			neighbor_id := from
 			if _, exists := connectionMap[neighbor_id]; !exists {
+				logweb.Annonce(id, from)
 				connectionMap[neighbor_id] = conn
 				go read_messages(conn, eventQueue)
 			} else {
@@ -92,7 +95,8 @@ func handleClient(conn net.Conn, connectionMap map[string]net.Conn, eventQueue c
 		}
 	case DEMANDE:
 		{
-			Info(id, "handleClient", "Election pour voir si je peux l'admettre")
+			logweb.DemandeAdmission(id)
+			//Info(id, "handleClient", "Election pour voir si je peux l'admettre")
 			if len(connectionMap) == 0 { // si je suis tout seul j'admet direct
 				handleAdmit(conn, eventQueue)
 			} else { // sinon election
@@ -110,7 +114,7 @@ func handleClient(conn net.Conn, connectionMap map[string]net.Conn, eventQueue c
 
 func handleAdmit(conn net.Conn, eventQueue chan<- Event) {
 	new_id := makeUniqueId()
-
+	logweb.Admet(id, new_id)
 	// TODO - mettre ca dans une fonction speciale ?
 	tosend := protocol.Msg_format_NET("num_msg", strconv.Itoa(current_msg_num)) + protocol.Msg_format_NET("from", id) + protocol.Msg_format_NET("nb_sites", strconv.Itoa(nbSites)) + protocol.Msg_format_NET("msg", ADMIS) + protocol.Msg_format_NET("your_id", new_id) + "\n"
 

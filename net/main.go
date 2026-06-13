@@ -75,6 +75,7 @@ func doPeriodique(eventFile chan<- Event) {
 			return
 		}
 		<-alarm.C
+		logweb.Demande()
 		eventFile <- AlarmEvent{}
 	}
 }
@@ -182,7 +183,7 @@ func handleNewMember(new_member_id string) {
 		parent = ""
 		elu = ""
 		nbSites += 1
-		display.Info(id, "handleNewMember", "envoie nb admis:handleNewMember : "+new_member_id[:10])
+		//display.Info(id, "handleNewMember", "envoie nb admis:handleNewMember : "+new_member_id[:10])
 		sendToCrlfromNET(protocol.Msg_format_Ctrl("nb_sites", strconv.Itoa(nbSites)))
 
 	}
@@ -202,7 +203,7 @@ func handleMessage(content string, conn net.Conn, eventFile chan<- Event) {
 	to := protocol.FindvalLight(content, "to")
 	not := protocol.FindvalLight(content, "not")
 
-	Info(id, "handleMessage", "reception de : "+msgContent)
+	//Info(id, "handleMessage", "reception de : "+msgContent)
 
 	if from == id { // on ne traite pas nos propres messages
 		return
@@ -233,7 +234,7 @@ func handleMessage(content string, conn net.Conn, eventFile chan<- Event) {
 		return
 	}
 
-	Info(id, "handleMessage", "prise en compte de : "+msgContent)
+	//Info(id, "handleMessage", "prise en compte de : "+msgContent)
 
 	switch msgContent {
 	case ADMIS:
@@ -251,10 +252,10 @@ func handleMessage(content string, conn net.Conn, eventFile chan<- Event) {
 				// je commence mon serveur
 				go server("localhost", server_port, connectionMap, eventFile)
 				nbSites += 1
-				display.Info(id, "DEBUG:handleNewMember", "envoie nb admis:if!admis : ")
+				//display.Info(id, "DEBUG:handleNewMember", "envoie nb admis:if!admis : ")
 				sendToCrlfromNET(protocol.Msg_format_Ctrl("nb_sites", strconv.Itoa(nbSites)))
 				go lirestdin(eventFile)
-				Info("", "", "Je suis admis ! Mon id est : "+id)
+				//Info("", "", "Je suis admis ! Mon id est : "+id)
 			}
 		}
 	case BLEU:
