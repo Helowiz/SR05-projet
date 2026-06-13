@@ -17,16 +17,15 @@ type EltMapFile struct {
 }
 
 type Estampille struct {
-	id_site int
+	id_site string
 	val_h   int
 }
 
 // global vars
 var h = 0            // horloge du site
-var this_id int      // id du site (passe en param)
+var this_id string   // id du site (passe en param)
 var proc_name string // nom du site (passe en param)
 var nbSites = 1      // mis à jour par le NET
-var n_msg = 0        // num serie messages
 
 var intervalles_recus = make(map[int][]protocol.Interval) // check si on a deja recu
 
@@ -286,28 +285,25 @@ func parse_app_msg(msg string) {
 }
 
 func envoyer(msg string, id int) {
-	n_msg++
 	est := Estampille{this_id, h}
 
 	horloge_vect_str := protocol.VectToString(horloge_vect)
-	sendToCtl(protocol.Msg_format_Ctrl("n_msg", strconv.Itoa(n_msg)) + protocol.Msg_format_Ctrl("target", strconv.Itoa(id)) + protocol.Msg_format_Ctrl("id", strconv.Itoa(est.id_site)) + protocol.Msg_format_Ctrl("hlg", strconv.Itoa(est.val_h)) + protocol.Msg_format_Ctrl("hlgvect", horloge_vect_str) + protocol.Msg_format_Ctrl("msg", msg) + protocol.Msg_format_Ctrl("color", color))
+	sendToCtl(protocol.Msg_format_Ctrl("target", strconv.Itoa(id)) + protocol.Msg_format_Ctrl("id", strconv.Itoa(est.id_site)) + protocol.Msg_format_Ctrl("hlg", strconv.Itoa(est.val_h)) + protocol.Msg_format_Ctrl("hlgvect", horloge_vect_str) + protocol.Msg_format_Ctrl("msg", msg) + protocol.Msg_format_Ctrl("color", color))
 }
 
 func envoyer_tous(msg string) {
-	n_msg++
 	est := Estampille{this_id, h}
 
 	horloge_vect_str := protocol.VectToString(horloge_vect)
 	// id=id_site hlg=val_h msg=msg
-	sendToCtl(protocol.Msg_format_Ctrl("n_msg", strconv.Itoa(n_msg)) + protocol.Msg_format_Ctrl("id", strconv.Itoa(est.id_site)) + protocol.Msg_format_Ctrl("hlg", strconv.Itoa(est.val_h)) + protocol.Msg_format_Ctrl("hlgvect", horloge_vect_str) + protocol.Msg_format_Ctrl("msg", msg) + protocol.Msg_format_Ctrl("color", color))
+	sendToCtl(protocol.Msg_format_Ctrl("id", strconv.Itoa(est.id_site)) + protocol.Msg_format_Ctrl("hlg", strconv.Itoa(est.val_h)) + protocol.Msg_format_Ctrl("hlgvect", horloge_vect_str) + protocol.Msg_format_Ctrl("msg", msg) + protocol.Msg_format_Ctrl("color", color))
 }
 
 /* Envoi aux autres le signal de liberation avec les donnes a jour*/
 func envoyer_liberation(newData string) {
-	n_msg++
 	est := Estampille{this_id, h}
 	horloge_vect_str := protocol.VectToString(horloge_vect)
-	sendToCtl(protocol.Msg_format_Ctrl("n_msg", strconv.Itoa(n_msg)) + protocol.Msg_format_Ctrl("id", strconv.Itoa(est.id_site)) + protocol.Msg_format_Ctrl("hlg", strconv.Itoa(est.val_h)) + protocol.Msg_format_Ctrl("hlgvect", horloge_vect_str) + protocol.Msg_format_Ctrl("msg", "liberation") + protocol.Msg_format_Ctrl("data", newData))
+	sendToCtl(protocol.Msg_format_Ctrl("id", strconv.Itoa(est.id_site)) + protocol.Msg_format_Ctrl("hlg", strconv.Itoa(est.val_h)) + protocol.Msg_format_Ctrl("hlgvect", horloge_vect_str) + protocol.Msg_format_Ctrl("msg", "liberation") + protocol.Msg_format_Ctrl("data", newData))
 
 }
 
@@ -420,37 +416,9 @@ func rec_accuse_sc(est Estampille) {
 
 func handleMsg(msg string) {
 	targetId := protocol.Findval(msg, "target", proc_name)
-
-	// extraire l'estampille
-	est, err := estampille_from_msg(msg)
-	if err != nil {
-
-	}
-
-	// traite pas nos propre msg
-	if est.id_site == this_id {
-		return
-	}
-
-	nmsg_recu_str := protocol.Findval(msg, "n_msg", proc_name)
-	nmsg_recu, err := strconv.Atoi(nmsg_recu_str)
-	if err != nil {
-		display.Error(proc_name, "erreur", "Erreur n_msg recu "+err.Error())
-		return
-	}
-
-	// check si deja recu, update intervalles au passage
-	if !protocol.UpdateInterval(intervalles_recus, est.id_site, nmsg_recu) {
-		return
-	}
-
 	if targetId == "" || targetId == strconv.Itoa(this_id) { // si le message est pour nous ou pour tous nous on le traite
-		if targetId == "" { // si le message est pour tous on le fait passer
-			forward(msg)
-		}
+
 		parse_ctl_message(msg)
-	} else { // si le message n'est pas pour nous on le renvoi a nos successeurs
-		forward(msg)
 	}
 }
 
@@ -458,7 +426,6 @@ func sendToCtl(msg string) {
 	if color == RED {
 		msg += protocol.Msg_format_Ctrl("snap_id", strconv.Itoa(idCurrentSnap))
 	}
-
 	display.Envoie(proc_name, "sendToCtl", "envoi : "+msg)
 	fmt.Println(msg)
 }

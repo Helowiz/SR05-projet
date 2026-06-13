@@ -1,0 +1,109 @@
+{
+  "states": [
+    {
+      "site_id": 1,
+      "horloge_vect": {
+        "1": 21,
+        "2": 10,
+        "3": 18
+      },
+      "board": {
+        "Shapes": {
+          "aa23a282-f913-4664-8397-e8ae86db9dcf": {
+            "Cmd": "rect",
+            "X": 216,
+            "Y": 135,
+            "Color": "#4488ff",
+            "W": 559,
+            "H": 138,
+            "R": 0,
+            "Value": "",
+            "Size": 0
+          },
+          "d15d12f8-2000-4aeb-b0d6-d5c5bde40867": {
+            "Cmd": "circle",
+            "X": 436,
+            "Y": 58,
+            "Color": "#4488ff",
+            "W": 0,
+            "H": 0,
+            "R": 201,
+            "Value": "",
+            "Size": 0
+          }
+        }
+      }
+    },
+    {
+      "site_id": 3,
+      "horloge_vect": {
+        "1": 18,
+        "2": 18,
+        "3": 28
+      },
+      "board": {
+        "Shapes": {
+          "aa23a282-f913-4664-8397-e8ae86db9dcf": {
+            "Cmd": "rect",
+            "X": 216,
+            "Y": 135,
+            "Color": "#4488ff",
+            "W": 559,
+            "H": 138,
+            "R": 0,
+            "Value": "",
+            "Size": 0
+          },
+          "d15d12f8-2000-4aeb-b0d6-d5c5bde40867": {
+            "Cmd": "circle",
+            "X": 436,
+            "Y": 58,
+            "Color": "#4488ff",
+            "W": 0,
+            "H": 0,
+            "R": 201,
+            "Value": "",
+            "Size": 0
+          }
+        }
+      }
+    },
+    {
+      "site_id": 2,
+      "horloge_vect": {
+        "1": 18,
+        "2": 20,
+        "3": 24
+      },
+      "board": {
+        "Shapes": {
+          "aa23a282-f913-4664-8397-e8ae86db9dcf": {
+            "Cmd": "rect",
+            "X": 216,
+            "Y": 135,
+            "Color": "#4488ff",
+            "W": 559,
+            "H": 138,
+            "R": 0,
+            "Value": "",
+            "Size": 0
+          },
+          "d15d12f8-2000-4aeb-b0d6-d5c5bde40867": {
+            "Cmd": "circle",
+            "X": 436,
+            "Y": 58,
+            "Color": "#4488ff",
+            "W": 0,
+            "H": 0,
+            "R": 201,
+            "Value": "",
+            "Size": 0
+          }
+        }
+      }
+    }
+  ],
+  "channel": [
+    "/=n_msg=6/=id=3/=hlg=26/=hlgvect=1:18,3:24,2:10/=msg=requete/=color=blanc"
+  ]
+}
