@@ -1,7 +1,7 @@
 package main
 
 import (
-	"SR05_projet/display"
+	"SR05-etude/display"
 	"SR05_projet/protocol"
 	"encoding/json"
 	"flag"

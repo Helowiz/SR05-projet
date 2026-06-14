@@ -33,12 +33,12 @@ cat /tmp/out_N2 > /tmp/in_C2 &
 
 
 $APP --port 4444 -id 1 < /tmp/in_A1 > /tmp/out_A1 &
-$CTL -n C1  -id 1 < /tmp/in_C1 > /tmp/out_C1 &
-$NET -p 8080 -a < /tmp/in_N1 > /tmp/out_N1 &
+$CTL -n C1  < /tmp/in_C1 > /tmp/out_C1 &
+$NET -p 8080 -a -dev < /tmp/in_N1 > /tmp/out_N1 &
 
 $APP --port 4445 -id 2 < /tmp/in_A2 > /tmp/out_A2 &
-$CTL -n C2 -id 2 < /tmp/in_C2 > /tmp/out_C2 &
-$NET -p 8081 -sp 8080 < /tmp/in_N2 > /tmp/out_N2 &
+$CTL -n C2 < /tmp/in_C2 > /tmp/out_C2 &
+$NET -p 8080 -dev < /tmp/in_N2 > /tmp/out_N2 &
 
 
 

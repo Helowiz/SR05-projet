@@ -1,7 +1,7 @@
 package logweb
 
 import (
-	"SR05_projet/protocol"
+	"SR05-etude/protocol"
 	"fmt"
 )
 
