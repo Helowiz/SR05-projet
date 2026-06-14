@@ -85,7 +85,7 @@ func init_sockets(broadcast_port string, eventQueue chan<- Event) {
 func read_messages(connection *net.UDPConn, eventQueue chan<- Event) {
 	defer connection.Close()
 	display.Info(G.Id, "read_messages", "En attente de messages sur : "+connection.LocalAddr().String())
-	buffer := make([]byte, 1024)
+	buffer := make([]byte, 65507) // taille max d'un paquet UDP
 
 	for {
 		n, clientAddr, err := connection.ReadFromUDP(buffer)
