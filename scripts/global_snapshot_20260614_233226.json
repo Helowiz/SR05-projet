@@ -1,0 +1,73 @@
+{
+  "states": [
+    {
+      "site_id": "1",
+      "horloge_vect": {
+        "": 1,
+        "0d3bdfc8-b862-4f2c-869c-e761e6019577": 47,
+        "8f469820-c8e1-4e11-be02-5760aa5d02cc": 62
+      },
+      "board": {
+        "Shapes": {
+          "2ff8f4a7-f435-44d5-812a-9b1bac23d445": {
+            "Cmd": "circle",
+            "X": 573,
+            "Y": 152,
+            "Color": "#4488ff",
+            "W": 0,
+            "H": 0,
+            "R": 147,
+            "Value": "",
+            "Size": 0
+          },
+          "446a8f01-061e-4c11-bcf5-3dec7317c80f": {
+            "Cmd": "circle",
+            "X": 752,
+            "Y": 216,
+            "Color": "#4488ff",
+            "W": 0,
+            "H": 0,
+            "R": 157,
+            "Value": "",
+            "Size": 0
+          }
+        }
+      }
+    },
+    {
+      "site_id": "2",
+      "horloge_vect": {
+        "": 1,
+        "0d3bdfc8-b862-4f2c-869c-e761e6019577": 50,
+        "8f469820-c8e1-4e11-be02-5760aa5d02cc": 61
+      },
+      "board": {
+        "Shapes": {
+          "2ff8f4a7-f435-44d5-812a-9b1bac23d445": {
+            "Cmd": "circle",
+            "X": 573,
+            "Y": 152,
+            "Color": "#4488ff",
+            "W": 0,
+            "H": 0,
+            "R": 147,
+            "Value": "",
+            "Size": 0
+          },
+          "446a8f01-061e-4c11-bcf5-3dec7317c80f": {
+            "Cmd": "circle",
+            "X": 752,
+            "Y": 216,
+            "Color": "#4488ff",
+            "W": 0,
+            "H": 0,
+            "R": 157,
+            "Value": "",
+            "Size": 0
+          }
+        }
+      }
+    }
+  ],
+  "channel": []
+}
