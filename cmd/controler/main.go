@@ -504,7 +504,7 @@ func main() {
 			}
 
 		} else if is_net_message(rcvmsg) { // reception d'un message du NET
-			display.Recu("MAIN_APP", proc_name, "contenu reçu par mon NET"+rcvmsg)
+			display.Recu("MAIN_APP", proc_name, "contenu reçu de la part de mon NET : "+rcvmsg)
 			parse_net_message(rcvmsg)
 		} else { // reception de l'application de base
 			h++
