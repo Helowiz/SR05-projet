@@ -3,6 +3,7 @@ package main
 import (
 	"SR05-etude/display"
 	"SR05_projet/protocol"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"net/http"
@@ -19,9 +20,27 @@ type Event struct {
 	content string
 }
 
-const NET string = "net"
-
 var sauvMsg []string
+
+func format_msg_json(msg string) string {
+	data := make(map[string]string)
+
+	keys := []string{"to", "info", "id", "from", "parent", "elu", "color", "nbvoisinsAttendus", "address", "port", "id_new", "neighbor_id", "add_member"}
+
+	for _, key := range keys {
+		val := protocol.Findval(msg, key, "")
+		if val != "" {
+			data[key] = val
+		}
+	}
+
+	jsonBytes, err := json.Marshal(data)
+	if err != nil {
+		fmt.Println("Erreur JSON:", err)
+		return "{}"
+	}
+	return string(jsonBytes)
+}
 
 func do_webserver(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "Bonjour depuis le serveur web en Go !")
@@ -41,6 +60,7 @@ func do_websocket(w http.ResponseWriter, r *http.Request) {
 	for _, msg := range sauvMsg {
 		ws_send(msg)
 	}
+	sauvMsg = nil
 
 	for {
 		_, message, err := cnx.ReadMessage()
@@ -53,12 +73,6 @@ func do_websocket(w http.ResponseWriter, r *http.Request) {
 }
 
 func ws_send(msg string) {
-
-	msg_type := protocol.Findval(msg, "to", "LogNet")
-	if msg_type != "log" {
-		return
-	}
-
 	if ws == nil {
 		sauvMsg = append(sauvMsg, msg)
 		fmt.Println("ws_send", "websocket non ouverte")
@@ -72,7 +86,7 @@ func ws_send(msg string) {
 	}
 }
 
-func listen_for_net_msg(eventQueue chan<- Event) {
+func listen_for_net_msg() {
 	var msg string
 	for {
 		_, err := fmt.Scanln(&msg)
@@ -80,12 +94,15 @@ func listen_for_net_msg(eventQueue chan<- Event) {
 			display.Error("SERVER :"+strconv.Itoa(os.Getpid()), "listen_for_clt_msg", "Scanln failed : "+err.Error())
 			return
 		}
-		ws_send(msg)
+		msg_type := protocol.Findval(msg, "to", "LogNet")
+		if msg_type == "log" {
+			ws_send(format_msg_json(msg))
+		}
+
 	}
 }
 
 func main() {
-	var eventQueue = make(chan Event, 100)
 
 	var port = flag.String("port", "12345", "n° de port")
 	var addr = flag.String("addr", "localhost", "nom/adresse machine")
@@ -94,6 +111,6 @@ func main() {
 
 	http.HandleFunc("/", do_webserver)
 	http.HandleFunc("/ws", do_websocket)
-	go listen_for_net_msg(eventQueue)
+	go listen_for_net_msg()
 	http.ListenAndServe(*addr+":"+*port, nil)
 }

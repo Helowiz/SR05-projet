@@ -1,53 +1,76 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="fr">
 <head>
     <meta charset="UTF-8">
-    <title>NET</title>
+    <title>NET Logs</title>
+    <style>
+
+        #logs span.type {
+            display: inline-block;
+            width: 200px;
+            font-weight: bold;
+            padding: 5px;
+        }
+
+        .WS             { color: gray; }
+        .ADMET          { color: green; }
+        .ADMIS          { color: cornflowerblue; }
+        .RECOIS_DEMANDE { color: orange; }
+        .DEMANDE        { color: orangered; }
+        .VOISINS        { color: purple; }
+        .VAGUE          { color: deepskyblue; }
+        .BRUT           { color: gray; }
+
+        .bleu  { color: blue; }
+        .rouge { color: red; }
+
+    </style>
 </head>
 <body>
-Log
-<form>
-    <p>
-        <button id="connecter">Connecter</button>
-        <button id="fermer">Fermer</button>
-        host : <input id="host" type="text" size="10" value="localhost">
-        port : <input id="port" type="text" maxlength="5" size="5" value="4444">
-    </p>
-</form>
-<hr>
-<b> Logs </b>
-<div id="logs" style="max-height: 40vh;overflow-y: scroll;"></div>
+
+<h2>Logs</h2>
+
+<p>
+    host : <input id="host" type="text" size="10" value="localhost">
+    port : <input id="port" type="text" maxlength="5" size="5" value="12345">
+    <button id="connecter">Connecter</button>
+    <button id="fermer">Fermer</button>
+</p>
+
+<div id="logs"></div>
+
 <script>
     var ws;
 
     document.getElementById("connecter").onclick = function(evt) {
-        if (ws) {
+        evt.preventDefault();
+        if (ws){
             return false;
         }
 
         var host = document.getElementById("host").value;
         var port = document.getElementById("port").value;
 
-        addToLog("Tentative de connexion")
-        addToLog("host = " + host + ", port = " + port)
-        ws = new WebSocket("ws://"+host+":"+port+"/ws");
+        wsLog("Tentative de connexion: " + host + ":" + port);
+        ws = new WebSocket("ws://" + host + ":" + port + "/ws");
 
         ws.onopen = function(evt) {
-            addToLog("Websocket ouverte");
+            wsLog("Websocket ouverte");
         }
 
         ws.onclose = function(evt) {
-            addToLog("Websocket fermée");
+            wsLog("Websocket fermée");
             ws = null;
         }
 
         ws.onmessage = function(evt) {
-            addToLog(evt.data);
+            parseLog(evt.data);
         }
 
         ws.onerror = function(evt) {
-            addToLog("Erreur: " + evt.data);
+            wsLog("Erreur de connexion");
         }
+
         return false;
     }
 
@@ -59,21 +82,59 @@ Log
         return false;
     }
 
-    document.getElementById("envoyer").onclick = function(evt) {
-        if (!ws) {
-            return false;
-        }
-
-        ws.send("hello depuis le client");
-        return false
+    function shortId(id) {
+        if (!id) return "?";
+        return id.substring(0, 4).toUpperCase();
     }
 
-    function addToLog(message) {
+    function addToLog(type, msg) {
         var logs = document.getElementById("logs");
         var d = document.createElement("div");
-        d.textContent = message;
+
+        d.innerHTML = `<span class="type ${type}">${type}</span>${msg}`;
+
         logs.appendChild(d);
-        logs.scroll(0, logs.scrollHeight);
+        logs.scrollTop = logs.scrollHeight;
+    }
+
+    function wsLog(message) {
+        addToLog("WS", message);
+    }
+
+    function parseLog(rawData) {
+        try {
+            var data = JSON.parse(rawData);
+            var infoType = data.info;
+            var text = "";
+
+            switch (infoType) {
+                case "ADMET":
+                    text = `Le site ${shortId(data.id)} admet le nouveau site ${shortId(data.id_new)}`;
+                    break;
+                case "ADMIS":
+                    text = `Le site ${shortId(data.id)} est admis, serveur: ${data.address}:${data.port}`;
+                    break;
+                case "RECOIS_DEMANDE":
+                    text = `Le site ${shortId(data.id)} reçoit une demande d'admission`;
+                    break;
+                case "DEMANDE":
+                    text = 'je demande a rejoindre le réseau';
+                    break;
+                case "VOISINS":
+                    text = `Le site ${shortId(data.id)} a un nouveau voisin ${shortId(data.neighbor_id)}`;
+                    break;
+                case "VAGUE":
+                    var colorClass = data.color === "bleu" ? "bleu" : (data.color === "rouge" ? "rouge" : "");
+                    text = `<span class='${colorClass}'> Le site ${shortId(data.id)} reçoit un message de vague ${data.color} de ${shortId(data.from)} ; elu: ${shortId(data.elu)} ; Voisins attendus: ${data.nbvoisinsAttendus} </span>`
+                    break;
+                default:
+                    text = rawData;
+            }
+            addToLog(infoType, text);
+
+        } catch (e) {
+            addToLog("BRUT", rawData);
+        }
     }
 </script>
 
