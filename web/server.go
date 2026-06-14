@@ -74,6 +74,11 @@ func wanna_leave() {
 	fmt.Println(msg)
 }
 
+func demande_admission() {
+	msg := protocol.Msg_format_Ctrl("type", "fromapp_demande_admission")
+	fmt.Println(msg)
+}
+
 func do_webserver(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/" && r.URL.Path != "/client.html" {
 		http.FileServer(http.Dir("../web/")).ServeHTTP(w, r)
@@ -134,6 +139,14 @@ func handle_ws_msg(message string) {
 	case "wanna_leave":
 		if suffix == "true" {
 			wanna_leave()
+		} else {
+			display.Warning("", "handle_ws_msg", "Message pour quitter le réseau mal formaté : "+message)
+		}
+	case "demande_admission":
+		if suffix == "true" {
+			demande_admission()
+		} else {
+			display.Warning("", "handle_ws_msg", "Message pour broadcast demande mal formaté : "+message)
 		}
 	}
 }
@@ -184,10 +197,20 @@ func handle_ctl_msg(msg string) {
 	msg_type := protocol.Findval(msg, "type")
 	msg_val := protocol.Findval(msg, "value")
 	switch msg_type {
-	case "leave_msg": // message de validation de départ (je peux quitter le réseau)
+	case protocol.LEAVE: // message de validation de départ (je peux quitter le réseau)
 		if msg_val == "true" {
 			display.Info("SERVER :"+strconv.Itoa(os.Getpid()), "handle_ctl_msg()", "Départ validé par le contrôleur, je quitte le réseau")
 			ws_send(protocol.LEAVE + "=true")
+		} else {
+			display.Warning("SERVER :"+strconv.Itoa(os.Getpid()), "handle_ctl_msg()", "Départ refusé par le contrôleur, je reste dans le réseau")
+		}
+	case protocol.ADMIS: // message de validation d'admission (je peux être admis)
+		if msg_val == "true" {
+			display.Info("SERVER :"+strconv.Itoa(os.Getpid()), "handle_ctl_msg()", "Admission validée par le contrôleur, je suis admis")
+			ws_send(protocol.ADMIS + "=true")
+		} else {
+			display.Warning("SERVER :"+strconv.Itoa(os.Getpid()), "handle_ctl_msg()", "Admission refusée par le contrôleur, je ne suis pas admis")
+			ws_send(protocol.ADMIS + "=false")
 		}
 	case "section_critique": // message sur la section critique
 		switch msg_val {

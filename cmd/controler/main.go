@@ -249,6 +249,8 @@ func parse_app_msg(msg string) {
 		app_fin_sc(newData)
 	case "fromapp_wanna_leave":
 		wanna_leave()
+	case "fromapp_demande_admission":
+		demande_admission()
 	case "snapshot_init":
 		color = RED
 		initiator = true
@@ -419,6 +421,10 @@ func wanna_leave() {
 	envoyer("fromctl_wanna_leave", "my_net_ctl")
 }
 
+func demande_admission() {
+	envoyer("fromctl_demande_admission", "my_net_ctl")
+}
+
 func sendToCtl(msg string) {
 	if color == RED {
 		msg += protocol.Msg_format_Ctrl("snap_id", strconv.Itoa(idCurrentSnap))
@@ -445,11 +451,24 @@ func handleAdmitted(net_msg string) {
 	if our_id == "" {
 		display.Error(proc_name, "handleAdmitted", "id recu vide")
 		return
+	} else if our_id == this_id {
+		display.Info(proc_name, "handleAdmitted", "Je suis déjà admis, je préviens l'appli !")
+	} else {
+		this_id = our_id
+		horloge_vect[this_id] = 0
+		map_file[this_id] = EltMapFile{"liberation", h}
 	}
-	this_id = our_id
-	horloge_vect[this_id] = 0
-	map_file[this_id] = EltMapFile{"liberation", h}
 
+	admis_app() // on préviens l'app qu'on est admis
+}
+
+/*
+admis_app
+
+Previens l'application de base qu'on est admis dans le réseau
+*/
+func admis_app() {
+	sendToApp(protocol.ADMIS, "true")
 }
 
 func handleNewSite(net_msg string) {

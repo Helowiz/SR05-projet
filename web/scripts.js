@@ -997,16 +997,13 @@ document.getElementById("connecter").onclick = function (evt) {
   var host = document.getElementById("host").value;
   var port = document.getElementById("port").value;
 
-  addToLog("[INFO] Tentative de connexion");
-  addToLog("[INFO] host = " + host + ", port = " + port);
+  addToLog("[INFO] Demande d'admission au réseau : " + host + ":" + port);
 
   ws = new WebSocket("ws://" + host + ":" + port + "/ws");
   ws.onopen = function (evt) {
-    scState = { from_other: false, from_self: false };
     addToLog("[INFO] Websocket ouverte");
     document.title = "🌐 " + port;
-    redraw();
-    updateCursorStyle();
+    sendWs({demande_admission : "true"})
   };
 
   ws.onclose = function (evt) {
@@ -1088,6 +1085,19 @@ function handleReceive(msg) {
     case "leave_msg": {
       addToLog("[INFO] Server accepted my leave request, closing websocket.");
       ws.close();
+      break;
+    }
+    case "admis": {
+      if (value === "true") {
+        scState = { from_other: false, from_self: false };
+        redraw();
+        updateCursorStyle();
+      } else if (value === "false") {
+        addToLog("[INFO] Server refused my admission request, closing websocket.");
+        ws.close();
+      } else {
+        addToLog("[WARN] Server sent an unexpected value for admission request: " + value);
+      }
       break;
     }
   }
