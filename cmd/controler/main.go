@@ -456,7 +456,7 @@ func handleNewSite(net_msg string) {
 	var err error
 	nbSites, err = strconv.Atoi(protocol.Findval(net_msg, "nb_sites"))
 	if err != nil {
-		display.Error(proc_name, "handleAdmitted", "Erreur nb_sites recu "+err.Error())
+		display.Error(proc_name, "handleNewSite", "Erreur nb_sites recu "+err.Error())
 		panic(err)
 	}
 }
@@ -474,6 +474,16 @@ func handleOtherLeave(net_msg string) {
 	if err != nil {
 		display.Error(proc_name, "handleOtherLeave", "Erreur nb_sites recu "+err.Error())
 		panic(err)
+	}
+	leaving_id := protocol.Findval(net_msg, "its_id")
+	if leaving_id == this_id {
+		display.Error(this_id, "handleOtherLeave", "J'ai reçu mon propre message de leave (ne devrait JAMAIS arriver)")
+		return
+	}
+	if _, ok := map_file[leaving_id]; ok {
+		delete(map_file, leaving_id)
+	} else {
+		display.Warning(this_id, "handleOtherLeave", "J'ai reçu un signal de leave d'un site que je ne connaissais pas : "+leaving_id)
 	}
 }
 
