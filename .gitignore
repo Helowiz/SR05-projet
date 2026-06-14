@@ -95,7 +95,7 @@ http-client.private.env.json
 *.dll
 *.so
 *.dylib
-bin/
+bin/ on en a besoin
 
 # Test binary, built with `go test -c`
 *.test
