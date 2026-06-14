@@ -12,6 +12,7 @@ var (
 	Reset  = "\033[0;00m"
 	Purple = "\033[1;35m"
 	Cyan   = "\033[1;36m"
+	Blue   = "\033[1;34m"
 )
 
 var pid = os.Getpid()
@@ -38,5 +39,5 @@ func Envoie(name string, where string, what string) {
 }
 
 func Recu(name string, where string, what string) {
-	baseDisplay(Cyan, "RECU", name, where, what)
+	baseDisplay(Blue, "RECU", name, where, what)
 }
