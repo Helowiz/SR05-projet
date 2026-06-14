@@ -247,6 +247,8 @@ func parse_app_msg(msg string) {
 	case "fromapp_fin_sc":
 		newData := protocol.Findval(msg, "data")
 		app_fin_sc(newData)
+	case "fromapp_wanna_leave":
+		wanna_leave()
 	case "snapshot_init":
 		color = RED
 		initiator = true
@@ -341,8 +343,12 @@ func app_dem_sc() {
 	h++
 	horloge_vect[this_id]++
 	map_file[this_id] = EltMapFile{"requete", h}
-	total += (nbSites - 1) // on envoie des messages à tous le monde sauf soi
-	envoyer_tous("requete")
+	if nbSites == 1 { // si je suis seul je peux entrer direct en SC
+		debut_sc_app()
+	} else {
+		total += (nbSites - 1) // on envoie des messages à tous le monde sauf soi
+		envoyer_tous("requete")
+	}
 }
 
 /* Traite une demande de fin de section critique de l'application de base */
@@ -350,8 +356,10 @@ func app_fin_sc(newData string) {
 	h++
 	horloge_vect[this_id]++
 	map_file[this_id] = EltMapFile{"liberation", h}
-	total += (nbSites - 1) // on envoie des messages à tous le monde sauf soi
-	envoyer_liberation(newData)
+	if nbSites != 1 { // si je suis seul je peux entrer direct en SC
+		total += (nbSites - 1) // on envoie des messages à tous le monde sauf soi
+		envoyer_liberation(newData)
+	}
 	fin_sc_app(newData)
 }
 
@@ -407,6 +415,10 @@ func rec_accuse_sc(est Estampille) {
 	}
 }
 
+func wanna_leave() {
+	envoyer("fromctl_wanna_leave", "my_net_ctl")
+}
+
 func sendToCtl(msg string) {
 	if color == RED {
 		msg += protocol.Msg_format_Ctrl("snap_id", strconv.Itoa(idCurrentSnap))
@@ -449,6 +461,22 @@ func handleNewSite(net_msg string) {
 	}
 }
 
+func handleSelfLeave() {
+	this_id = ""
+	horloge_vect = make(map[string]int)
+	map_file = make(map[string]EltMapFile)
+	sendToApp(protocol.LEAVE, "true")
+}
+
+func handleOtherLeave(net_msg string) {
+	var err error
+	nbSites, err = strconv.Atoi(protocol.Findval(net_msg, "nb_sites"))
+	if err != nil {
+		display.Error(proc_name, "handleOtherLeave", "Erreur nb_sites recu "+err.Error())
+		panic(err)
+	}
+}
+
 func parse_net_message(net_msg string) {
 	type_msg := protocol.Findval(net_msg, "type")
 	switch type_msg {
@@ -456,6 +484,10 @@ func parse_net_message(net_msg string) {
 		handleAdmitted(net_msg)
 	case protocol.NEW_MEMBER:
 		handleNewSite(net_msg)
+	case protocol.LEAVE:
+		handleSelfLeave()
+	case "other_leave":
+		handleOtherLeave(net_msg)
 	}
 
 }
@@ -479,7 +511,7 @@ func main() {
 			display.Error(*p_nom, "erreur", "Lecture stdin terminée ou en erreur: "+err.Error())
 			//return
 		}
-		//display.Info(*p_nom, "main", "recu : "+rcvmsg)
+		// display.Info(*p_nom, "main", "recu : "+rcvmsg)
 		if is_ctl_message(rcvmsg) { // reception d'un autre site
 
 			if this_id == "" { // si je suis pas admis je fais rien

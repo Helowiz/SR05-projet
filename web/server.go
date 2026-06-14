@@ -54,10 +54,10 @@ func doLocalSnapshot() {
 	fmt.Println(msg)
 }
 
-func reloadSnapshot() {
-	msg := protocol.Msg_format_Ctrl("type", "relaod")
-	fmt.Println(msg)
-}
+// func reloadSnapshot() {
+// 	msg := protocol.Msg_format_Ctrl("type", "reload")
+// 	fmt.Println(msg)
+// }
 
 func demander_sc() {
 	msg := protocol.Msg_format_Ctrl("type", "fromapp_debut_sc")
@@ -66,6 +66,11 @@ func demander_sc() {
 
 func liberer_sc(newOpe string) {
 	msg := protocol.Msg_format_Ctrl("type", "fromapp_fin_sc") + protocol.Msg_format_Ctrl("data", newOpe)
+	fmt.Println(msg)
+}
+
+func wanna_leave() {
+	msg := protocol.Msg_format_Ctrl("type", "fromapp_wanna_leave")
 	fmt.Println(msg)
 }
 
@@ -123,8 +128,13 @@ func handle_ws_msg(message string) {
 		initiate = true
 		doLocalSnapshot()
 
-	case "reload":
-		reloadSnapshot()
+	// case "reload":
+	// 	reloadSnapshot()
+
+	case "wanna_leave":
+		if suffix == "true" {
+			wanna_leave()
+		}
 	}
 }
 
@@ -174,6 +184,11 @@ func handle_ctl_msg(msg string) {
 	msg_type := protocol.Findval(msg, "type")
 	msg_val := protocol.Findval(msg, "value")
 	switch msg_type {
+	case "leave_msg": // message de validation de départ (je peux quitter le réseau)
+		if msg_val == "true" {
+			display.Info("SERVER :"+strconv.Itoa(os.Getpid()), "handle_ctl_msg()", "Départ validé par le contrôleur, je quitte le réseau")
+			ws_send(protocol.LEAVE + "=true")
+		}
 	case "section_critique": // message sur la section critique
 		switch msg_val {
 		case "true":

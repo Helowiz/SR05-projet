@@ -1033,10 +1033,16 @@ document.getElementById("connecter").onclick = function (evt) {
 // Gère le clic sur le bouton "Fermer" pour fermer la connexion WebSocket avec le serveur.
 // Vérifie d'abord si la connexion est établie avant de tenter de la fermer, et affiche un message dans les logs.
 document.getElementById("fermer").onclick = function (evt) {
-  if (!ws) {
+  if (!ws || scState.from_other || pendingState || scState.from_self || dragState || drawState) {
     return false;
+  } else {
+    // On va prévenir le serveur qu'on souhaite fermer la connexion, pour que le contrôleur NET
+    // lance une élection pour savoir si on peut quitter le réseau. On ne ferme pas la websocket directement,
+    // car le serveur pourrait refuser la fermeture si un autre site gagne l'élection.
+    addToLog("[INFO] Tentative de départ du réseau");
+    sendWs({wanna_leave: "true"});
   }
-  ws.close();
+  // ws.close();
   return false;
 };
 
@@ -1077,6 +1083,11 @@ function handleReceive(msg) {
           redraw();
           break;
       }
+      break;
+    }
+    case "leave_msg": {
+      addToLog("[INFO] Server accepted my leave request, closing websocket.");
+      ws.close();
       break;
     }
   }

@@ -16,6 +16,7 @@ const BLEU = "bleu"
 const ROUGE = "rouge"
 const VAGUE = "vague"
 const NEW_MEMBER = "new_member"
+const LEAVE = "leave_msg"
 
 func Findval(msg string, key string) string {
 	sep := msg[0:1]
