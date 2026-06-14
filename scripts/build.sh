@@ -20,3 +20,5 @@ if ! go build -o bin/netsrv ../net/web; then
     echo "Erreur de compilation pour log"
     exit 1
 fi
+
+echo "Compilation finie"
