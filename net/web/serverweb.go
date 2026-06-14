@@ -1,7 +1,7 @@
 package main
 
 import (
-	"SR05-etude/display"
+	"SR05_projet/display"
 	"SR05_projet/protocol"
 	"encoding/json"
 	"flag"
@@ -28,7 +28,7 @@ func format_msg_json(msg string) string {
 	keys := []string{"to", "info", "id", "from", "parent", "elu", "color", "nbvoisinsAttendus", "address", "port", "id_new", "neighbor_id", "add_member"}
 
 	for _, key := range keys {
-		val := protocol.Findval(msg, key, "")
+		val := protocol.Findval(msg, key)
 		if val != "" {
 			data[key] = val
 		}
@@ -94,7 +94,7 @@ func listen_for_net_msg() {
 			display.Error("SERVER :"+strconv.Itoa(os.Getpid()), "listen_for_clt_msg", "Scanln failed : "+err.Error())
 			return
 		}
-		msg_type := protocol.Findval(msg, "to", "LogNet")
+		msg_type := protocol.Findval(msg, "to")
 		if msg_type == "log" {
 			ws_send(format_msg_json(msg))
 		}

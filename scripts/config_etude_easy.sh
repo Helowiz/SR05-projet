@@ -29,9 +29,6 @@ cat /tmp/out_N1 > /tmp/in_C1 &
 cat /tmp/out_N2 > /tmp/in_C2 &
 
 
-
-
-
 $APP --port 4444 -id 1 < /tmp/in_A1 > /tmp/out_A1 &
 $CTL -n C1  < /tmp/in_C1 > /tmp/out_C1 &
 $NET -p 8080 -a -dev < /tmp/in_N1 > /tmp/out_N1 &

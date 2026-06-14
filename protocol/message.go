@@ -9,6 +9,9 @@ import (
 var fieldsepCtrl = "/"
 var keyvalsepCtrl = "="
 
+var fieldsepNET = "&"
+var keyvalsepNET = "$"
+
 const DEMANDE = "demande"
 const ANNONCE = "annonce" // Pour annoncer au démarrage que je suis le voisin d'un site
 const ADMIS = "admis"
@@ -37,6 +40,12 @@ func Findval(msg string, key string) string {
 	return ""
 }
 
+// formatte le message pour le NET
+func Msg_format(key string, val string) string {
+	return fieldsepNET + keyvalsepNET + key + keyvalsepNET + val
+}
+
+// formatte le message pour le controleur
 func Msg_format_Ctrl(key string, val string) string {
 
 	return fieldsepCtrl + keyvalsepCtrl + key + keyvalsepCtrl + val

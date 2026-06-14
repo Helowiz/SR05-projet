@@ -18,17 +18,16 @@ if ! go build -o bin/ctl ../cmd/controler/main.go; then
     exit 1
 fi
 
-# Caio : je propose qu'on build plus NET dcp on ramène l'executable tout fait
-# if ! go build -o bin/net ../net; then
-#     echo "Erreur de compilation pour net"
-#     exit 1
-# fi
+if ! go build -o bin/net ../net/main; then
+     echo "Erreur de compilation pour net"
+     exit 1
+fi
 
-# if ! go build -o bin/logweb ../net/web; then
-#     echo "Erreur de compilation pour log"
-#     exit 1
-# fi
+if ! go build -o bin/netsrv ../net/web; then
+    echo "Erreur de compilation pour log"
+    exit 1
+fi
 
 echo "Compilation réussie."
 
-./config_etude_easy.sh ./bin/app ./bin/ctl ./bin/net ./bin/logweb
+./config_etudev1.sh ./bin/app ./bin/ctl ./bin/net ./bin/netsrv
