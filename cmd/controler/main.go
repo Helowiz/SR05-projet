@@ -158,6 +158,9 @@ func parse_ctl_message(msg string) {
 
 	switch msg_content {
 
+	case "wb_ops": // reception d'un message du site qui m'a admis pour me transmettre l'état actuel du whiteboard
+		sendToApp("wb_ops", msg)
+
 	case "requete":
 		total--
 		rec_dem_sc(est)
@@ -251,6 +254,10 @@ func parse_app_msg(msg string) {
 		wanna_leave()
 	case "fromapp_demande_admission":
 		demande_admission()
+	case "wb_ops": // message de l'app contenant le white board actuel pour le transmettre au nouveau membre
+		new_member_id := protocol.Findval(msg, "new_member_id")
+		msg = "wb_ops" + msg
+		envoyer(msg, new_member_id)
 	case "snapshot_init":
 		color = RED
 		initiator = true
@@ -477,6 +484,11 @@ func handleNewSite(net_msg string) {
 	if err != nil {
 		display.Error(proc_name, "handleNewSite", "Erreur nb_sites recu "+err.Error())
 		panic(err)
+	}
+	if protocol.Findval(net_msg, "i_am_the_parent") == "true" {
+		// getting the wb from app
+		display.Info(proc_name, "handleNewSite", "Je suis le parent du nouveau site, je préviens l'app qu'il y a un nouveau membre")
+		sendToApp(protocol.NEW_MEMBER, protocol.Findval(net_msg, "new_member_id"))
 	}
 }
 

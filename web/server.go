@@ -201,6 +201,7 @@ func handle_ctl_msg(msg string) {
 		if msg_val == "true" {
 			display.Info("SERVER :"+strconv.Itoa(os.Getpid()), "handle_ctl_msg()", "Départ validé par le contrôleur, je quitte le réseau")
 			ws_send(protocol.LEAVE + "=true")
+			whiteboard.Clear()
 		} else {
 			display.Warning("SERVER :"+strconv.Itoa(os.Getpid()), "handle_ctl_msg()", "Départ refusé par le contrôleur, je reste dans le réseau")
 		}
@@ -211,6 +212,30 @@ func handle_ctl_msg(msg string) {
 		} else {
 			display.Warning("SERVER :"+strconv.Itoa(os.Getpid()), "handle_ctl_msg()", "Admission refusée par le contrôleur, je ne suis pas admis")
 			ws_send(protocol.ADMIS + "=false")
+		}
+	case protocol.NEW_MEMBER: // message de notification d'un nouveau membre
+		// sending back to ctl the actual wb state
+		msg := protocol.Msg_format_Ctrl("type", "wb_ops") + protocol.Msg_format_Ctrl("new_member_id", msg_val)
+		ops := whiteboard.ToOperations()
+		n_ops := len(ops)
+		msg += protocol.Msg_format_Ctrl("n_ops", strconv.Itoa(n_ops))
+		i := 0
+		for _, ope := range ops {
+			msg += protocol.Msg_format_Ctrl("op"+strconv.Itoa(i), ope)
+			i++
+		}
+		fmt.Println(msg)
+	case "wb_ops": // message de mon controleur contenant les opérations du whiteboard pour le mettre à jour parce que je viens d'être admis
+		n_ops_str := protocol.Findval(msg, "n_ops")
+		n_ops, err := strconv.Atoi(n_ops_str)
+		if err != nil {
+			display.Error("SERVER :"+strconv.Itoa(os.Getpid()), "handle_ctl_msg()", "Erreur de conversion n_ops : "+err.Error())
+			return
+		}
+		for i := 0; i < n_ops; i++ {
+			ope := protocol.Findval(msg, "op"+strconv.Itoa(i))
+			modify_data(ope)
+			ws_send("data=" + ope)
 		}
 	case "section_critique": // message sur la section critique
 		switch msg_val {
